@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Railyard Dispatcher — Kingsbridge Central</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header id="topbar">
+    <div class="brand">
+      <span class="logo">▤</span>
+      <div>
+        <div class="bname">KINGSBRIDGE CENTRAL</div>
+        <div class="bsub">Control Office · Panel A</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><label>Station Clock</label><span id="s-clock">06:00</span></div>
+      <div class="stat"><label>Score</label><span id="s-score">0</span></div>
+      <div class="stat"><label>Shift</label><span id="s-level">1</span></div>
+      <div class="stat"><label>Punctuality</label><span id="s-punct">—</span></div>
+      <div class="stat"><label>Combo</label><span id="s-combo">×1.0</span></div>
+      <div class="stat lives"><label>Strikes</label><span id="s-lives">●●●</span></div>
+    </div>
+    <div class="ctrls">
+      <div class="vol" title="Game sound only">
+        <button id="btn-mute" title="Mute / unmute (M)">🔊</button>
+        <input id="vol" type="range" min="0" max="100" step="1" value="65" aria-label="Sound volume">
+      </div>
+      <button id="btn-pause" title="Pause (Space)">⏸</button>
+      <button id="btn-help" title="How to play">?</button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <canvas id="cv"></canvas>
+    <div id="toasts"></div>
+    <div id="banner"></div>
+  </main>
+
+  <aside id="panel">
+    <h2>Train Register</h2>
+    <div id="board"></div>
+    <div id="assign">
+      <div class="ahead">Assign road</div>
+      <div class="ahead2">road · longest train it holds</div>
+      <div class="akeys"></div>
+      <div id="hint">Select a train, then pick a road.</div>
+    </div>
+  </aside>
+
+  <div id="overlay" class="show">
+    <div class="card">
+      <h1>RAILYARD <em>DISPATCHER</em></h1>
+      <p class="tag" id="overlayTag">Signalling Panel A</p>
+      <div id="stationPick">
+        <div class="ahead">Choose a station</div>
+        <div id="stationPicker" class="stations"></div>
+        <p id="stnBlurb" class="stn-blurb-line"></p>
+      </div>
+      <div class="rules">
+        <div><b>1.</b> Trains approach from the west and east and hold at the home signal.</div>
+        <div><b>2.</b> Select a waiting train (click it, or click its row on the register), then assign a road — click the track, press a number key, or use the buttons.</div>
+        <div><b>3.</b> A road is only cleared when the platform is free <i>and</i> the station throat is clear. Platforms are drawn to scale, so how long a train each one takes is something you can see rather than memorise, and each carries a <i>MAX</i> board at both ends.</div>
+        <div><b>4.</b> Not every service calls. Freight and non-stop expresses are marked <i>RUNS THROUGH</i>: they never berth, and freight is too long for any platform, so it takes a through road, marked with no platform at all.</div>
+        <div><b>5.</b> Score for punctual arrivals, departures and through runs. Park short trains on short platforms for an efficiency bonus.</div>
+        <div><b>6.</b> Three strikes — a service cancelled through excessive delay — and your shift is over. Traffic builds every shift.</div>
+      </div>
+      <button id="btn-start">BEGIN SHIFT</button>
+      <div class="foot">Space pause · number keys assign road · Esc deselect · M mute</div>
+    </div>
+  </div>
+
+</div>
+<script src="js/audio.js"></script>
+<script src="js/geom.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/train.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
