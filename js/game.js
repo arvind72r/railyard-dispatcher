@@ -37,7 +37,7 @@
     gameT: 360, elapsed: 0, level: 1, score: 0, lives: 3, combo: 0,
     onTime: 0, events: 0, arrivals: 0,
     spawnIn: 2.5, sel: null, hoverTrack: -1, hoverTrain: null,
-    night: 0, fullHouse: false, people: [], lastBoard: 0
+    night: 0, fullHouse: false, people: [], lastBoard: 0, ttDone: []
   };
   RY.G = G;
 
@@ -66,6 +66,7 @@
     var h = Math.floor(mins / 60) % 24, m = Math.floor(mins % 60);
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
   }
+  function trName(tr) { return tr.svcName || tr.code; }
   function toast(x, y, text, cls) {
     var p = toScreen(x, y), d = document.createElement('div');
     d.className = 'toast ' + (cls || 'info');
@@ -132,13 +133,13 @@
   }
   function routeBlocked(tr, track) {
     var own = G.trackOwner[track.id];
-    if (own) return track.short + ' occupied by ' + own.code;
+    if (own) return track.short + ' occupied by ' + trName(own);
     var ent = tr.dir > 0 ? 'W' : 'E', side = ent === 'W' ? 'West' : 'East';
     var c = throatConflict(ent, tr, track.id);
     if (c) {
       return c.crossing
-        ? side + ' throat: ' + track.short + ' crosses ' + c.train.code + ' on ' + T[c.train.trackId].short
-        : side + ' throat busy — ' + c.train.code + ' is still using it';
+        ? side + ' throat: ' + track.short + ' crosses ' + trName(c.train) + ' on ' + T[c.train.trackId].short
+        : side + ' throat busy — ' + trName(c.train) + ' is still using it';
     }
     // A through-running service's far-side throat is not reserved up front —
     // see updateTrain()'s 'routed' branch, which holds it at that gate if
@@ -163,19 +164,27 @@
     G.trackOwner[idx] = tr; tr.holdsTrack = true;
     var ent = tr.dir > 0 ? 'W' : 'E';
     G.throat[ent][slotOf(tr.dir)] = tr; tr.holdsThroat[ent] = true;
+    // A yard-origin service is physically leaving its stabling road for
+    // good the moment it's called forward — free that road now, or it
+    // stays "occupied" by a train that's no longer anywhere near it,
+    // quietly shrinking the yard's real capacity for good.
+    if (tr.yardOrigin && tr.yardRoad !== null) {
+      RY.YARD[tr.yardRoad].occupant = null;
+      tr.yardRoad = null;
+    }
     tr.routeTo(track);
-    tr.state = 'routed';
+    tr.state = tr.yardOrigin ? 'toPlatform' : 'routed';
     tr.flash = 0.7;
 
     var mm = tr.mid();
-    toast(mm.x, mm.y - 34, 'ROAD SET · ' + track.short +
+    toast(mm.x, mm.y - 34, (tr.yardOrigin ? 'FORMING · ' : 'ROAD SET · ') + track.short +
           (tr.stops ? '' : ' · RUNS THROUGH'), 'good');
     if (tr.stops && track.maxCars === minCap) {
       G.score += 40;
       toast(mm.x, mm.y - 58, 'EFFICIENT +40', 'good');
     }
     if (G.sel === tr) G.sel = null;
-    hint('<b>' + tr.code + '</b> routed into ' + track.name + '.');
+    hint('<b>' + trName(tr) + '</b> ' + (tr.yardOrigin ? 'forming at ' : 'routed into ') + track.name + '.');
     return true;
   }
 
@@ -202,7 +211,7 @@
     var m = tr.mid();
     G.score -= 250; G.combo = 0; G.lives--; G.events++;
     toast(m.x, m.y - 34, 'CANCELLED −250', 'bad');
-    banner('SERVICE CANCELLED', tr.code + ' held ' + LATE_MAX + ' minutes at the home signal');
+    banner('SERVICE CANCELLED', trName(tr) + ' held ' + LATE_MAX + ' minutes at the home signal');
     release(tr);
     tr.state = 'gone';
     if (G.lives <= 0) gameOver();
@@ -272,11 +281,69 @@
     G.trains.push(tr);
   }
 
+  /* ================= terminus timetable ================= */
+  var YARD_ARRIVE_LEAD = 9;   // minutes an arrival is visible before it's booked to reach the platform
+
+  function freeYardRoad() {
+    for (var i = 0; i < RY.YARD.length; i++) if (!RY.YARD[i].occupant) return RY.YARD[i];
+    return null;
+  }
+
+  /* A departure's initial position: parked on a yard road with nowhere
+     else to be yet, exactly like a train that arrived and was stabled —
+     except this one is still in 'approach', selectable, and its first
+     routeTo() shunts it to a platform rather than building the usual
+     mainline path (see routeTo() in train.js). */
+  function parkNewArrival(tr, road) {
+    var parkX = L.yardNear + 250;   // matches the depth an arrival's own shunt parks at
+    tr.path = RY.makePath([{ x: parkX - tr.len - 60, y: road.y }, { x: parkX + 60, y: road.y }]);
+    tr.s = tr.len + 60;
+    tr.sSlow = 0; tr.sFast = tr.path.len;
+    tr.v = 0;
+    tr.targetS = tr.s;
+    tr.yardRoad = road.id;
+    tr.yardOrigin = true;
+    road.occupant = tr;
+  }
+
+  /* Runs instead of spawn()/weightedType() at a terminus: services appear
+     on their own booked times rather than a random weighted mix. */
+  function scheduleTimetable() {
+    var tt = RY.station.timetable, i, e, tr, road;
+    for (i = 0; i < tt.length; i++) {
+      if (G.ttDone[i]) continue;
+      e = tt[i];
+      if (e.dir > 0) {
+        if (G.gameT < e.t - YARD_ARRIVE_LEAD) continue;
+        tr = new RY.Train(e.type, 1, G.gameT);
+        tr.sched = e.t;
+        tr.schedDep = e.t + tr.cfg.dwell;
+        tr.svcName = e.name;
+        G.trains.push(tr);
+        G.ttDone[i] = true;
+      } else {
+        if (G.gameT < e.t - e.prep) continue;
+        road = freeYardRoad();
+        if (!road) continue;             // yard's full — try again once one clears
+        tr = new RY.Train(e.type, -1, G.gameT);
+        parkNewArrival(tr, road);
+        tr.sched = e.t - e.prep + Math.min(e.prep - 4, 10);   // how long they'll wait before it's fair to call this late
+        tr.schedDep = e.t;
+        tr.svcName = e.name;
+        G.trains.push(tr);
+        G.ttDone[i] = true;
+      }
+    }
+  }
+
   /* ================= per-frame simulation ================= */
   function followTargets() {
     [1, -1].forEach(function (dir) {
+      // A yard-origin service isn't on the shared approach line at all —
+      // it's sitting in the yard on its own path, so it has no place in
+      // this queue and no business being capped behind whoever's in it.
       var list = G.trains.filter(function (t) {
-        return t.dir === dir && (t.state === 'approach' || t.state === 'routed');
+        return t.dir === dir && !t.yardOrigin && (t.state === 'approach' || t.state === 'routed');
       }).sort(function (a, b) { return b.s - a.s; });
       for (var i = 0; i < list.length; i++) {
         var t = list[i];
@@ -319,8 +386,14 @@
           if (tr.s >= tr.stopS - 0.4 && tr.v < 0.6) {
             tr.state = 'dwell';
             tr.dwellUntil = G.gameT + tr.cfg.dwell;
-            G.arrivals++;
-            punctual(G.gameT - tr.sched, 120, tr, 'ARRIVED');
+            // A yard-origin service reaching its platform via a shunt
+            // isn't arriving off the network — it already scored (or
+            // didn't) when it was first sent for; this dwell is the
+            // boarding call, not a fresh arrival.
+            if (!tr.yardOrigin) {
+              G.arrivals++;
+              punctual(G.gameT - tr.sched, 120, tr, 'ARRIVED');
+            }
           }
         } else {
           var farSide = tr.dir > 0 ? 'E' : 'W';
@@ -355,7 +428,13 @@
         break;
 
       case 'dwell':
-        if (G.gameT >= tr.dwellUntil) tr.state = 'awaitDepart';
+        if (G.gameT >= tr.dwellUntil) {
+          // At a terminus, an arrival's passengers are off and it's the
+          // yard it wants next, not the open road — a departure formed in
+          // the yard, though, is a normal working from here: it boards,
+          // then leaves west exactly like any other station's departure.
+          tr.state = (RY.station.terminus && tr.dir > 0) ? 'awaitYard' : 'awaitDepart';
+        }
         break;
 
       case 'awaitDepart':
@@ -370,7 +449,71 @@
         break;
 
       case 'depart':
+        // Checked by arc length with a real margin, not by x position at
+        // the exact boundary: the mainline path a terminus arrival is
+        // still on ends only 40px past that boundary (so the yard is
+        // on-canvas rather than an off-stage horizon), which put this in
+        // an outright race with the ordinary "reached the end of the
+        // path" fallback a few lines down — that fallback's own 1-unit
+        // margin doesn't leave this room to ever actually win it.
+        if (RY.station.terminus && tr.yardRoad !== null && !tr.yardSpliced && tr.s >= tr.path.len - 30) {
+          var yr = RY.YARD[tr.yardRoad], hx = tr.headX(), mainY = tr.dir > 0 ? L.mainB : L.mainA;
+          tr.path = RY.spliceLateral(L.yardNear, mainY, yr.y, tr.dir);
+          tr.s = RY.sAtX(tr.path, hx);
+          tr.sSlow = 0; tr.sFast = tr.path.len;
+          tr.targetS = tr.path.len;
+          tr.yardSpliced = true;
+          tr.state = 'toYard';
+          // The yard's visible depth is deliberately shorter than a full
+          // consist (so parked stock still reads on-canvas), which means
+          // the tail can be short of the usual release thresholds even
+          // once "parked" — updateResources()'s ordinary tail-position
+          // checks, gated on 'depart' or a non-stopping service, would
+          // just never fire again once state moves past 'depart', leaving
+          // the platform and throat permanently marked occupied by a
+          // train that's no longer anywhere near either. None of that
+          // matters once a train has committed to the yard, though — it's
+          // fully clear of anything the interlocking still needs to
+          // reason about — so release everything for it right here.
+          release(tr);
+          break;
+        }
         if (tr.s >= tr.path.len - 1) { release(tr); tr.state = 'gone'; }
+        break;
+
+      /* ---- terminus only, from here down ---- */
+
+      case 'awaitYard':
+        var exY = tr.dir > 0 ? 'E' : 'W', freeRoad = null, fi;
+        for (fi = 0; fi < RY.YARD.length; fi++) if (!RY.YARD[fi].occupant) { freeRoad = RY.YARD[fi]; break; }
+        if (freeRoad && !throatConflict(exY, tr, tr.trackId)) {
+          G.throat[exY][slotOf(tr.dir)] = tr; tr.holdsThroat[exY] = true;
+          freeRoad.occupant = tr; tr.yardRoad = freeRoad.id;
+          tr.state = 'depart';
+          tr.targetS = Infinity;
+        }
+        break;
+
+      case 'toYard':
+        if (tr.v < 0.6 && tr.s >= tr.targetS - 0.5) {
+          tr.state = 'parked';
+          tr.parkedUntil = G.gameT + 26;
+        }
+        break;
+
+      case 'parked':
+        if (G.gameT >= tr.parkedUntil) {
+          if (tr.yardRoad !== null) RY.YARD[tr.yardRoad].occupant = null;
+          tr.state = 'gone';
+        }
+        break;
+
+      case 'toPlatform':
+        if (tr.v < 0.6 && tr.s >= tr.targetS - 0.5) {
+          tr.yardLinked = true;
+          tr.routeTo(T[tr.trackId]);
+          tr.state = 'routed';
+        }
         break;
     }
     updateResources(tr);
@@ -415,11 +558,15 @@
     }
     G.night = Math.min(0.58, Math.max(0, (G.level - 1) * 0.085));
 
-    G.spawnIn -= dt;
-    if (G.spawnIn <= 0) {
-      spawn();
-      var headway = Math.max(5.0, 16 - (G.level - 1) * 1.05);
-      G.spawnIn = headway * (0.75 + Math.random() * 0.5);
+    if (RY.station.terminus) {
+      scheduleTimetable();
+    } else {
+      G.spawnIn -= dt;
+      if (G.spawnIn <= 0) {
+        spawn();
+        var headway = Math.max(5.0, 16 - (G.level - 1) * 1.05);
+        G.spawnIn = headway * (0.75 + Math.random() * 0.5);
+      }
     }
 
     followTargets();
@@ -562,12 +709,17 @@
               y: (hd.y + tl.y) / 2 };
     var above = tr.dir > 0 ? -1 : 1;
     var y = m.y + above * 38;
-    var txt = tr.code, sub = '', col = '#f0b429', mid = null, midCol = '#9aa4b0';
+    var txt = tr.svcName || tr.code, sub = '', col = '#f0b429', mid = null, midCol = '#9aa4b0';
 
     if (tr.state === 'approach') {
       var d = G.gameT - tr.sched;
-      sub = d > 0.75 ? '+' + d.toFixed(0) + ' min late' : 'due ' + fmtTime(tr.sched);
-      col = d > 3 ? '#ff7a5c' : d > 0.75 ? '#f0b429' : '#7ee0a0';
+      if (tr.yardOrigin) {
+        sub = d > 0.75 ? 'call it forward \u2014 +' + d.toFixed(0) + ' min' : 'ready \u00b7 dep ' + fmtTime(tr.schedDep);
+        col = d > 3 ? '#ff7a5c' : '#7ee0a0';
+      } else {
+        sub = d > 0.75 ? '+' + d.toFixed(0) + ' min late' : 'due ' + fmtTime(tr.sched);
+        col = d > 3 ? '#ff7a5c' : d > 0.75 ? '#f0b429' : '#7ee0a0';
+      }
       if (tr.stops) {
         mid = 'CALLS \u00b7 ' + eligible(tr).map(function (k) { return k.short; }).join(' ');
         midCol = '#79c0ff';
@@ -575,10 +727,16 @@
         mid = 'RUNS THROUGH \u00b7 ' + eligible(tr).map(function (k) { return k.short; }).join(' ');
         midCol = '#f0b429';
       }
+    } else if (tr.state === 'toPlatform') {
+      sub = 'forming \u00b7 ' + T[tr.trackId].short; col = '#7ee0a0';
     } else if (tr.state === 'dwell') {
       sub = 'dep ' + fmtTime(tr.schedDep); col = '#79c0ff';
     } else if (tr.state === 'awaitDepart') {
       sub = 'held \u2014 throat busy'; col = '#ff7a5c';
+    } else if (tr.state === 'awaitYard') {
+      sub = 'held \u2014 yard busy'; col = '#ff7a5c';
+    } else if (tr.state === 'toYard' || tr.state === 'parked') {
+      sub = 'stabled'; col = '#9aa4b0';
     } else if (tr.state === 'routed') {
       var atFarGate = !tr.stops && !tr.gateCleared && tr.targetS !== Infinity;
       if (atFarGate) {
@@ -704,8 +862,10 @@
   /* ================= HUD ================= */
   function statusOf(tr) {
     if (tr.state === 'approach') {
+      if (tr.yardOrigin) return (G.gameT - tr.sched > 0.75) ? ['DELAYED', 'st-late'] : ['IN YARD', 'st-wait'];
       return (G.gameT - tr.sched > 0.75) ? ['DELAYED', 'st-late'] : ['WAITING', 'st-wait'];
     }
+    if (tr.state === 'toPlatform') return ['FORMING', 'st-run'];
     if (tr.state === 'routed') {
       if (!tr.stops && !tr.gateCleared && tr.targetS !== Infinity) {
         return ['HELD', 'st-late'];
@@ -713,12 +873,17 @@
       return ['RUNNING', 'st-run'];
     }
     if (tr.state === 'dwell') return ['AT PLATFORM', 'st-dwell'];
-    if (tr.state === 'awaitDepart') return ['HELD', 'st-late'];
+    if (tr.state === 'awaitDepart' || tr.state === 'awaitYard') return ['HELD', 'st-late'];
     return ['DEPARTING', 'st-run'];
   }
 
   function renderBoard() {
-    var list = G.trains.slice().sort(function (a, b) { return a.sched - b.sched; });
+    // Once a service is quietly shunting into or sitting in the yard, it's
+    // no longer anything the dispatcher can act on — leave it off the
+    // register rather than clutter it with entries nothing can be done
+    // with; it's still there, parked, on the canvas.
+    var list = G.trains.filter(function (t) { return t.state !== 'toYard' && t.state !== 'parked'; })
+                        .sort(function (a, b) { return a.sched - b.sched; });
     if (!list.length) {
       elBoard.innerHTML = '<div class="empty">No services on the panel.<br>Stand by.</div>';
       return;
@@ -729,11 +894,13 @@
       var roads = eligible(tr).map(function (k) { return k.short; }).join(' ');
       html += '<div class="row' + (G.sel === tr ? ' sel' : '') + '" data-id="' + tr.id +
               '" style="border-left-color:' + tr.cfg.body + '">' +
-        '<div class="r1"><span class="code">' + tr.code + '</span>' +
-        '<span class="sched">' + fmtTime(tr.sched) + '</span></div>' +
+        '<div class="r1"><span class="code">' + (tr.svcName || tr.code) + '</span>' +
+        '<span class="sched">' + fmtTime(tr.svcName ? (tr.dir > 0 ? tr.sched : tr.schedDep) : tr.sched) + '</span></div>' +
         '<div class="r2"><span class="kind">' + tr.cfg.label + ' · ' + tr.cars + ' cars</span>' +
         '<span class="stat2 ' + st[1] + '">' + st[0] + '</span></div>' +
-        '<div class="r3"><span>' + (tr.dir > 0 ? '▶ ' : '◀ ') + tr.origin + ' → ' + tr.dest + '</span>' +
+        '<div class="r3"><span>' + (tr.svcName
+          ? (tr.dir > 0 ? '▶ off the network' : '◀ forming for departure')
+          : (tr.dir > 0 ? '▶ ' : '◀ ') + tr.origin + ' → ' + tr.dest) + '</span>' +
         '<span class="road">' + (tr.trackId !== null ? T[tr.trackId].short : '—') + '</span></div>' +
         '<div class="r4"><span class="calls ' + (tr.stops ? 'c-stop' : 'c-pass') + '">' +
         (tr.stops ? 'CALLS' : 'RUNS THROUGH') + '</span>' +
@@ -811,7 +978,7 @@
     var tr = hitTrain(w.x, w.y), ti = hitTrack(w.x, w.y);
     if (tr && tr.state === 'approach') { select(tr); return; }
     if (G.sel && ti >= 0) { assign(G.sel, ti); renderBoard(); renderKeys(); return; }
-    if (tr) { select(null); hint('<b>' + tr.code + '</b> is already on the move.'); return; }
+    if (tr) { select(null); hint('<b>' + trName(tr) + '</b> is already on the move.'); return; }
     select(null);
   });
 
@@ -820,7 +987,7 @@
     if (tr) {
       var free = [], i;
       for (i = 0; i < T.length; i++) if (!canAssign(tr, T[i])) free.push(T[i].short);
-      hint('<b>' + tr.code + '</b> · ' + tr.cfg.label + ' · ' + tr.cars + ' cars<br>' +
+      hint('<b>' + trName(tr) + '</b> · ' + tr.cfg.label + ' · ' + tr.cars + ' cars<br>' +
            (tr.stops
               ? 'Calls here — needs a platform of ' + tr.cars + ' or more.'
               : 'Runs through — no booked stop.') + '<br>' +
@@ -1039,6 +1206,7 @@
     G.gameT = 360; G.elapsed = 0; G.level = 1; G.score = 0; G.lives = 3;
     G.combo = 0; G.onTime = 0; G.events = 0; G.arrivals = 0;
     G.spawnIn = 2.0; G.sel = null; G.night = 0; G.fullHouse = false;
+    G.ttDone = def.terminus ? def.timetable.map(function () { return false; }) : [];
     makePeople();
     document.getElementById('btn-pause').textContent = '\u23f8';
     elOverlay.classList.remove('show');

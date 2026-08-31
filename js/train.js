@@ -119,6 +119,20 @@
     // routine release of holdsThroat far downstream can't be mistaken for
     // a fresh arrival at the gate and yank the train backwards.
     this.gateCleared = false;
+
+    // Terminus-only: a service formed in the yard rather than arriving off
+    // the main starts parked on a yard road (see game.js's scheduleYard),
+    // and its first routeTo() is a shunt move onto its platform rather
+    // than the usual mainline path — see routeTo() below. yardRoad is the
+    // stabling road it currently owns, whichever end of its journey that's
+    // at; svcName is the real timetable name shown in place of the random
+    // service code, for services spawned that way.
+    this.yardOrigin = false;
+    this.yardRoad = null;
+    this.yardLinked = false;
+    this.yardSpliced = false;
+    this.parkedUntil = 0;
+    this.svcName = null;
   }
   RY.Train = Train;
 
@@ -210,9 +224,25 @@
   };
 
   /* Re-lay the train onto the road it has been given.  Arc length up to
-     the home signal is identical on every road, so s carries over. */
+     the home signal is identical on every road, so s carries over — with
+     one exception: a service formed in the yard isn't anywhere near the
+     home signal yet. Its first routeTo() instead splices a shunt curve
+     from wherever it's actually parked straight to the platform berth;
+     once that shunt completes (see updateTrain's 'toPlatform' case) it
+     calls routeTo() a second time, by which point yardLinked is set and
+     this falls through to the normal path exactly as any other train's. */
   Train.prototype.routeTo = function (track) {
     this.trackId = track.id;
+    if (this.yardOrigin && !this.yardLinked) {
+      var here = RY.pathAt(this.path, this.s);
+      var berthX = this.berthHeadX();
+      var pts = RY.sCurve(here.x, here.y, berthX, track.y, 60);
+      this.path = RY.makePath(pts);
+      this.s = 0;
+      this.sSlow = 0; this.sFast = this.path.len;
+      this.targetS = this.path.len;
+      return;
+    }
     this.setPath(RY.buildPath(this.dir, track.y));
     this.stopS = RY.sAtX(this.path, this.berthHeadX());
     this.targetS = this.stops ? this.stopS : Infinity;

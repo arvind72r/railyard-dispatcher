@@ -7,7 +7,7 @@ station efficiently; three cancelled services and your shift is over.
 
 ## Choosing a station
 
-The opening screen offers four stations, each a genuinely different track
+The opening screen offers five stations, each a genuinely different track
 layout rather than a reskin — the number of roads, how many are through roads
 versus platforms, where those through roads sit, and how the platforms pair
 into islands are all different:
@@ -18,13 +18,51 @@ into islands are all different:
 | Bramwell Halt         | Beginner  | 3     | One siding, one island — learn the board.     |
 | Northgate Junction    | Advanced  | 7     | One through road, three islands — busy.       |
 | Selby Yard            | Standard  | 4     | A through road at each end, one island between.|
+| MGR Chennai Central   | Advanced  | 12    | A real terminus, with a stabling yard behind it.|
 
-Every station is generated from its road list alone — how many roads, which
-are platforms, and which pairs of platforms share an island — so the throat
-geometry, the turnout stagger, and the crossing rules described below are
-worked out fresh for each one rather than hand-tuned. Switching only happens
-from the start screen or after a shift ends; the "?" button mid-shift shows
-the rules again without offering to swap the layout out from under you.
+Every through station is generated from its road list alone — how many roads,
+which are platforms, and which pairs of platforms share an island — so the
+throat geometry, the turnout stagger, and the crossing rules described below
+are worked out fresh for each one rather than hand-tuned. Switching only
+happens from the start screen or after a shift ends; the "?" button mid-shift
+shows the rules again without offering to swap the layout out from under you.
+
+### MGR Chennai Central is a different kind of station
+
+The other four are all *through* stations — a train can enter one end and
+carry on out the other. MGR Chennai Central is a **terminus**: every road
+dead-ends against the concourse, so nothing ever "continues through." What
+happens instead:
+
+- An arrival **calls**, unloads, and is then shunted out to a stabling yard
+  behind the station (nodded to here as Basin Bridge, where the real
+  station's coach care depot actually is) rather than vanishing off toward
+  another destination.
+- A departure is **formed** in that yard ahead of time — it appears in the
+  Train Register as soon as it's ready to be called forward, with its
+  booked departure time shown, and you assign it a platform exactly like an
+  arrival. Leave it too long and boarding runs out of road, exactly as
+  leaving any train waiting too long does elsewhere.
+- Both moves still go through the same crossing checks as everywhere else —
+  an arrival shunting out to the yard and a departure being called forward
+  from it are, geometrically, just another pair of routes that can or can't
+  share the throat at the same time.
+
+Two honesty notes, since this one is modelled on somewhere real:
+
+- The **platform count and relative layout** (twelve mainline platforms,
+  numbered 1–11 with a shorter 2A) follow the real station, but the exact
+  pointwork — which turnout sits where, precisely how the yard throat is
+  arranged — isn't public information, so this is a faithful likeness built
+  from the same road-list generator as every other station, not a
+  survey-accurate reproduction.
+- The **timetable is representative, not authoritative or live**. Indian
+  Railways doesn't publish a fixed train-to-platform pairing in the first
+  place (platforms are assigned on the day — which is the job here), and
+  hand-transcribing the real current schedule isn't something that can be
+  done reliably. The service names are real routes the station actually
+  runs; the times are illustrative, and will not match what the board at
+  Chennai Central says today.
 
 ## Running it
 
@@ -190,7 +228,7 @@ A horn already sounding is cut with everything else, not left to finish.
 | File            | Contents |
 |-----------------|----------|
 | `js/audio.js`   | the Web Audio graph: rolling bed, air horn, mute and volume |
-| `js/geom.js`    | the station roster, the layout generator that turns a road list into real geometry, path building, arc-length maths, the precomputed throat crossing table |
-| `js/scene.js`   | the permanent way — ballast, sleepers, rails, platforms, buildings — baked once to an offscreen canvas |
+| `js/geom.js`    | the station roster, the layout generator that turns a road list into real geometry (including the yard, for a terminus), path building, arc-length maths, the precomputed throat crossing table, the platform<->yard shunt curve |
+| `js/scene.js`   | the permanent way — ballast, sleepers, rails, platforms, the stabling yard, buildings — baked once to an offscreen canvas |
 | `js/train.js`   | rolling stock: consists, movement physics, plan-view rendering |
-| `js/game.js`    | clock, interlocking, scoring, difficulty, HUD and input |
+| `js/game.js`    | clock, interlocking, scoring, difficulty, HUD and input, and the terminus timetable scheduler |

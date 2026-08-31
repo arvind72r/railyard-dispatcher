@@ -368,6 +368,26 @@
     }
   }
 
+  /* The stabling yard, terminus stations only. The sidings themselves are
+     already baked as ordinary trackwork (see buildTrackwork) — this adds
+     the buffer stops that mark where a shunt has to stop, and a sign
+     naming the place, since it's really a whole depot standing in. */
+  function drawYard(ctx) {
+    var i, yr, x = L.yardFar;
+    for (i = 0; i < RY.YARD.length; i++) {
+      yr = RY.YARD[i];
+      ctx.save();
+      ctx.translate(x, yr.y);
+      ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-3, -13, 8, 28);
+      ctx.fillStyle = '#3a3f46'; ctx.fillRect(-4, -14, 8, 28);
+      ctx.fillStyle = '#c8382c'; ctx.fillRect(-4, -14, 8, 5);
+      ctx.fillStyle = 'rgba(255,255,255,.5)';
+      ctx.fillRect(-4, -8, 8, 2); ctx.fillRect(-4, 2, 8, 2);
+      ctx.restore();
+    }
+    signPlate(ctx, (L.yardNear + L.yardFar) / 2, RY.YARD[0].y - 46, 'BASIN BRIDGE YARD · STABLING', '#233047');
+  }
+
   /* A lattice footbridge spanning the whole station.  Drawn over the
      trains by the live renderer, since it passes above them. */
   RY.drawFootbridge = function (ctx) {
@@ -572,6 +592,7 @@
 
     for (i = 0; i < RY.ISLANDS.length; i++) drawIsland(ctx, RY.ISLANDS[i], rnd);
     for (i = 0; i < T.length; i++) if (!T[i].platform) drawThroughRoadSign(ctx, T[i]);
+    if (RY.station.terminus) drawYard(ctx);
 
     drawBuildings(ctx, rnd);
 
