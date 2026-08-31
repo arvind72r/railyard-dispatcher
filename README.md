@@ -30,14 +30,18 @@ shows the rules again without offering to swap the layout out from under you.
 ### MGR Chennai Central is a different kind of station
 
 The other four are all *through* stations — a train can enter one end and
-carry on out the other. MGR Chennai Central is a **terminus**: every road
-dead-ends against the concourse, so nothing ever "continues through." What
+carry on out the other, with the network on the west and again on the east.
+MGR Chennai Central is a **terminus**, and genuinely shaped like one: every
+platform dead-ends at a buffer stop on the west, against the concourse, and
+*all* access — the network approach and the stabling yard alike — is
+squeezed onto the single throat on the east. Nothing ever "continues
+through," and nothing ever enters or leaves from the west at all. What
 happens instead:
 
-- An arrival **calls**, unloads, and is then shunted out to a stabling yard
-  behind the station (nodded to here as Basin Bridge, where the real
-  station's coach care depot actually is) rather than vanishing off toward
-  another destination.
+- An arrival **calls**, unloads, and is then shunted back out through that
+  same east throat to a stabling yard behind the station (nodded to here as
+  Basin Bridge, where the real station's coach care depot actually is)
+  rather than vanishing off toward another destination.
 - A departure is **formed** in that yard ahead of time — it appears in the
   Train Register as soon as it's ready to be called forward, with its
   booked departure time shown, and you assign it a platform exactly like an

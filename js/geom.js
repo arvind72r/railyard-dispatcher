@@ -20,7 +20,8 @@
      once at load, keeps pointing at live data after a station switch. */
   var LAY = RY.LAY = {
     xWestEnd: 0, xWestHome: 0, xThroatW: 0, xThroatE: 0,
-    xEastHome: 0, xEastEnd: 0, mainA: 0, mainB: 0, stopX: 0, maxDiv: 136
+    xEastHome: 0, xEastEnd: 0, mainA: 0, mainB: 0, stopX: 0, maxDiv: 136,
+    terminus: false
   };
   RY.TRACKS = [];
   RY.ISLANDS = [];
@@ -28,9 +29,17 @@
 
   /* A platform is exactly as long as the train it can hold, so the
      capacity of a road is something you can see rather than remember.
-     One car pitch is PLAT_UNIT; the extra is the overhang at each end. */
+     One car pitch is PLAT_UNIT; the extra is the overhang at each end.
+     A terminus platform has nothing symmetric about it — every road's
+     rail genuinely ends at the buffer, so its span hangs off the shared
+     throat anchor (xThroatE) rather than centring on stopX like a
+     through platform does. */
   RY.PLAT_UNIT = 112;
   RY.platSpan = function (t) {
+    if (LAY.terminus) {
+      var len = t.maxCars * RY.PLAT_UNIT + 44;
+      return { x0: LAY.xThroatE - len, x1: LAY.xThroatE, len: len };
+    }
     var half = (t.maxCars * RY.PLAT_UNIT + 44) / 2;
     return { x0: LAY.stopX - half, x1: LAY.stopX + half, len: half * 2 };
   };
@@ -165,17 +174,19 @@
 
   var CENTER_Y = 555, TRACK_GAP = 130, BAND_HALF = 300, STOP_X = 920;
 
-  /* A terminus reuses the same double-throat engine as a through station
-     (see buildPath) but only ever plays the west throat as "the real
-     network" — the east throat instead leads to a stabling yard, which
-     needs to be visible on-canvas rather than run off to an off-stage
-     horizon. stopX stays the same as every other station (scene.js bakes
-     lineside buildings around it once, not per station), so the room for
-     that comes entirely out of a tighter home-signal gap on both sides. */
-  var TERM_HOME_GAP = 170, TERM_YARD_GAP = 96;
+  /* A terminus is not a reshaped through station: every road dead-ends at
+     a buffer stop on the west, and the single throat — on the east —
+     carries both the network approach and the stabling yard, exactly as
+     a real terminus like MGR Chennai Central does (all access from one
+     side). xThroatE is the one anchor every platform's rail actually
+     touches; each platform's own length (not a shared symmetric span)
+     decides how far west of it the buffer sits — see RY.platSpan. Chosen
+     to leave every platform, even the longest, clear of the lineside
+     signal box scene.js draws near the west edge. */
+  var TERM_THROAT_X = 1120, TERM_HOME_GAP = 170, TERM_YARD_GAP = 96;
 
-  /* Every road, whatever the station, connects to both mains through a
-     ladder of the same kind — only the road count and the longest
+  /* Every road, whatever the station, connects to its throat/mains through
+     a ladder of the same kind — only the road count and the longest
      platform change how far apart things need to be. */
   function layoutStation(def) {
     var n = def.tracks.length;
@@ -191,33 +202,51 @@
     tracks.forEach(function (t) { if (t.platform) maxPlatCars = Math.max(maxPlatCars, t.maxCars); });
     var half = (maxPlatCars * RY.PLAT_UNIT + 44) / 2;
     var stopX = STOP_X;
-    var homeGap = def.terminus ? TERM_HOME_GAP : 340;
-    var xThroatW = stopX - half - 90, xThroatE = stopX + half + 90;
-    var xWestHome = xThroatW - homeGap, xEastHome = xThroatE + homeGap;
-    var lay = {
-      xWestEnd: xWestHome - 900, xWestHome: xWestHome,
-      xThroatW: xThroatW, xThroatE: xThroatE,
-      xEastHome: xEastHome, xEastEnd: def.terminus ? xEastHome + 40 : xEastHome + 900,
-      mainA: CENTER_Y - 50, mainB: CENTER_Y + 50,
-      stopX: stopX, maxDiv: 136
-    };
-    var islands = def.islands.map(function (pair) {
-      var a = tracks[pair[0]], b = tracks[pair[1]];
-      var upper = a.y < b.y ? a : b, lower = a.y < b.y ? b : a;
-      return { y0: upper.y + 25, y1: lower.y - 25, upper: upper, lower: lower };
-    });
+    var lay, yard = [];
 
-    var yard = [];
     if (def.terminus) {
+      var xThroatE = TERM_THROAT_X;
+      var xEastHome = xThroatE + TERM_HOME_GAP;
+      // xWestEnd/xWestHome/xThroatW have no physical meaning here — there
+      // is no west throat — but every other module keeps a live `var L =
+      // RY.LAY` taken once at load, so these still need real values (not
+      // undefined) in case anything reads them generically. Mirroring the
+      // east side makes any such read a harmless no-op rather than a
+      // crash or a stale value left over from a previously-loaded station.
+      lay = {
+        xWestEnd: xEastHome, xWestHome: xEastHome,
+        xThroatW: xThroatE, xThroatE: xThroatE,
+        xEastHome: xEastHome, xEastEnd: xEastHome + 900,
+        mainA: CENTER_Y - 50, mainB: CENTER_Y + 50,
+        stopX: stopX, maxDiv: 136, terminus: true
+      };
+      lay.yardNear = xEastHome + 40;    // where a shunt move first leaves the main
+      lay.yardFar = RY.W - 60;          // how far into the yard a stabled train sits
       var yn = def.yard || 6;
       var ygap = Math.min(TERM_YARD_GAP, (2 * BAND_HALF) / Math.max(1, yn - 1));
       var ytop = CENTER_Y - (yn - 1) * ygap / 2;
       for (var yi = 0; yi < yn; yi++) {
         yard.push({ id: yi, y: ytop + yi * ygap, maxCars: 7, occupant: null });
       }
-      lay.yardNear = xEastHome + 40;    // where a shunt move first leaves the main
-      lay.yardFar = RY.W - 60;          // how far into the yard a stabled train sits
+    } else {
+      var homeGap = 340;
+      var xThroatW = stopX - half - 90, xThroatE = stopX + half + 90;
+      var xWestHome = xThroatW - homeGap, xEastHome = xThroatE + homeGap;
+      lay = {
+        xWestEnd: xWestHome - 900, xWestHome: xWestHome,
+        xThroatW: xThroatW, xThroatE: xThroatE,
+        xEastHome: xEastHome, xEastEnd: xEastHome + 900,
+        mainA: CENTER_Y - 50, mainB: CENTER_Y + 50,
+        stopX: stopX, maxDiv: 136, terminus: false
+      };
     }
+
+    var islands = def.islands.map(function (pair) {
+      var a = tracks[pair[0]], b = tracks[pair[1]];
+      var upper = a.y < b.y ? a : b, lower = a.y < b.y ? b : a;
+      return { y0: upper.y + 25, y1: lower.y - 25, upper: upper, lower: lower };
+    });
+
     return { lay: lay, tracks: tracks, islands: islands, yard: yard };
   }
 
@@ -244,29 +273,14 @@
     return def;
   };
 
-  /* A short local path spliced onto wherever a train currently is, easing
-     it sideways onto a different y (a yard road) over `run` px and then
-     holding straight for `hold` px more — used only for the low-stakes
-     platform<->yard shunt, never for anything the interlocking has to
-     reason about (that's all decided before the shunt starts). */
-  /* This is spliced onto a train that's already mid-journey, so its
-     domain is padded well behind `anchorX` too (PAD, comfortably longer
-     than any consist) — otherwise a train whose tail hadn't yet reached
-     the splice point would have no valid position on the new path at
-     all. The padding and the lead-in before the curve are both a plain
-     y0 straight line, geometrically identical to the path being replaced
-     over that stretch, so nothing about the train's rendered position
-     moves at the moment of the swap. */
-  RY.spliceLateral = function (anchorX, y0, targetY, dirSign) {
-    var PAD = 820, LEAD = 70, RUN = 120, HOLD = 60;
-    var xb = anchorX + dirSign * LEAD;
-    var xc = xb + dirSign * RUN;
-    var xd = xc + dirSign * HOLD;
-    var pts = [{ x: anchorX - dirSign * PAD, y: y0 }, { x: xb, y: y0 }];
-    var curve = RY.sCurve(xb, y0, xc, targetY, 40);
-    for (var i = 1; i < curve.length; i++) pts.push(curve[i]);
-    pts.push({ x: xd, y: targetY });
-    return RY.makePath(pts);
+  /* A direct shunt curve between two points a train is stationary at —
+     the platform<->yard move at a terminus, in either direction. Both
+     ends are always at rest when this is built (an arrival has finished
+     dwelling; a departure hasn't moved since it was formed), so unlike
+     the mainline paths above this never needs to preserve a train's
+     existing position on the curve — it always starts fresh at s=0. */
+  RY.shuntCurve = function (x0, y0, x1, y1) {
+    return RY.makePath(RY.sCurve(x0, y0, x1, y1, 60));
   };
 
   /* Transition curves are chorded finely enough that a vehicle never
@@ -310,12 +324,44 @@
     for (var i = skipFirst ? 1 : 0; i < src.length; i++) dst.push(src[i]);
   }
 
+  function trackAtY(trackY) {
+    for (var i = 0; i < RY.TRACKS.length; i++) if (RY.TRACKS[i].y === trackY) return RY.TRACKS[i];
+    return null;
+  }
+
   /* Full journey: off-stage -> home signal -> throat -> road -> throat
      -> off-stage.  Arc length from the start to the home signal is the
-     same on every road, so a waiting train can be re-routed in place. */
+     same on every road, so a waiting train can be re-routed in place.
+
+     A terminus has no far side to run out to — every road dead-ends at
+     its own buffer (see RY.platSpan) — so both directions here share the
+     one east throat instead of using opposite ones: dir>0 (an arrival)
+     runs off-stage-east -> home -> throat -> buffer; dir<0 (a departure,
+     already sitting at its buffer once routeTo() has shunted it there)
+     runs the same points in reverse, buffer -> throat -> home ->
+     off-stage-east. Arc length still only ever increases in the
+     direction of travel — it's simply increasing x for one stream and
+     decreasing x for the other, which every consumer of a path (sAtX,
+     posAt, the crossing table) already treats as no more than "a
+     monotonic coordinate", never assuming which way it runs. */
   RY.buildPath = function (dir, trackY) {
     var p = [], my = dir > 0 ? LAY.mainB : LAY.mainA;
     var off = RY.divOff(my, trackY);
+    if (LAY.terminus) {
+      var trk = trackAtY(trackY);
+      var bufX = trk ? RY.platSpan(trk).x0 : LAY.xThroatE - 700;
+      if (dir > 0) {
+        p.push({ x: LAY.xEastEnd, y: my }, { x: LAY.xEastHome, y: my },
+               { x: LAY.xEastHome - off, y: my });
+        cat(p, RY.sCurve(LAY.xEastHome - off, my, LAY.xThroatE, trackY, CURVE_N), true);
+        p.push({ x: bufX, y: trackY });
+      } else {
+        p.push({ x: bufX, y: trackY }, { x: LAY.xThroatE, y: trackY });
+        cat(p, RY.sCurve(LAY.xThroatE, trackY, LAY.xEastHome - off, my, CURVE_N), true);
+        p.push({ x: LAY.xEastHome, y: my }, { x: LAY.xEastEnd, y: my });
+      }
+      return RY.makePath(p);
+    }
     if (dir > 0) {
       p.push({ x: LAY.xWestEnd, y: my }, { x: LAY.xWestHome, y: my },
              { x: LAY.xWestHome + off, y: my });
@@ -450,24 +496,36 @@
     var segs = [], t, i, offA, offB;
 
     // Main-line tails, running as far as the last turnout in each throat.
-    segs.push(RY.makePath([{ x: LAY.xWestEnd, y: LAY.mainA }, { x: LAY.xWestHome + LAY.maxDiv, y: LAY.mainA }]));
-    segs.push(RY.makePath([{ x: LAY.xWestEnd, y: LAY.mainB }, { x: LAY.xWestHome + LAY.maxDiv, y: LAY.mainB }]));
+    // A terminus has no west throat at all — its roads dead-end at their
+    // own buffer (see the platform-roads loop below) rather than tailing
+    // off toward an off-stage west.
+    if (!LAY.terminus) {
+      segs.push(RY.makePath([{ x: LAY.xWestEnd, y: LAY.mainA }, { x: LAY.xWestHome + LAY.maxDiv, y: LAY.mainA }]));
+      segs.push(RY.makePath([{ x: LAY.xWestEnd, y: LAY.mainB }, { x: LAY.xWestHome + LAY.maxDiv, y: LAY.mainB }]));
+    }
     segs.push(RY.makePath([{ x: LAY.xEastHome - LAY.maxDiv, y: LAY.mainA }, { x: LAY.xEastEnd, y: LAY.mainA }]));
     segs.push(RY.makePath([{ x: LAY.xEastHome - LAY.maxDiv, y: LAY.mainB }, { x: LAY.xEastEnd, y: LAY.mainB }]));
 
-    // Platform roads.
+    // Platform roads — a through road's rail runs the full throat-to-throat
+    // width regardless of the shorter deck alongside it; a terminus road's
+    // rail genuinely ends at its own buffer, so it's only as long as
+    // RY.platSpan says this particular platform is.
     for (i = 0; i < RY.TRACKS.length; i++) {
       t = RY.TRACKS[i];
-      segs.push(RY.makePath([{ x: LAY.xThroatW, y: t.y }, { x: LAY.xThroatE, y: t.y }]));
+      var west = LAY.terminus ? RY.platSpan(t).x0 : LAY.xThroatW;
+      segs.push(RY.makePath([{ x: west, y: t.y }, { x: LAY.xThroatE, y: t.y }]));
     }
 
-    // Both throats: every road connected to both mains — the ladder.
+    // The throat ladder: every road connected to both mains. A terminus
+    // only ever plays the east throat — see buildPath.
     for (i = 0; i < RY.TRACKS.length; i++) {
       t = RY.TRACKS[i];
       offA = RY.divOff(LAY.mainA, t.y);
       offB = RY.divOff(LAY.mainB, t.y);
-      segs.push(RY.makePath(RY.sCurve(LAY.xWestHome + offA, LAY.mainA, LAY.xThroatW, t.y, CURVE_N)));
-      segs.push(RY.makePath(RY.sCurve(LAY.xWestHome + offB, LAY.mainB, LAY.xThroatW, t.y, CURVE_N)));
+      if (!LAY.terminus) {
+        segs.push(RY.makePath(RY.sCurve(LAY.xWestHome + offA, LAY.mainA, LAY.xThroatW, t.y, CURVE_N)));
+        segs.push(RY.makePath(RY.sCurve(LAY.xWestHome + offB, LAY.mainB, LAY.xThroatW, t.y, CURVE_N)));
+      }
       segs.push(RY.makePath(RY.sCurve(LAY.xThroatE, t.y, LAY.xEastHome - offA, LAY.mainA, CURVE_N)));
       segs.push(RY.makePath(RY.sCurve(LAY.xThroatE, t.y, LAY.xEastHome - offB, LAY.mainB, CURVE_N)));
     }

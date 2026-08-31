@@ -98,6 +98,25 @@
      turnout before any of them reach theirs. */
   function slotOf(dir) { return dir > 0 ? 'pos' : 'neg'; }
 
+  /* Which throat side a train's move claims. A through station has two —
+     dir>0 enters/exits west, dir<0 east. A terminus has exactly one, on
+     the east, for both directions (see geom.js's buildPath) — an
+     arrival's entry and its later yard-bound shunt, and a departure's
+     yard-to-platform shunt and its later real departure, all pass
+     through the same physical ladder, just at different points in time. */
+  function entSide(tr) { return RY.station.terminus ? 'E' : (tr.dir > 0 ? 'W' : 'E'); }
+
+  /* Drop just the throat lock on `side`, leaving trackOwner untouched —
+     used at a terminus, where entry and exit share one resource across
+     time, to free it between the two claims instead of holding it the
+     whole time a train dwells (which would make the second claim look
+     like a self-conflict — see throatConflict). */
+  function releaseThroatHold(tr, side) {
+    var slot = slotOf(tr.dir);
+    if (G.throat[side][slot] === tr) G.throat[side][slot] = null;
+    tr.holdsThroat[side] = false;
+  }
+
   function crosses(side, tr, trackId, opp) {
     if (!opp) return false;
     var posId = tr.dir > 0 ? trackId : opp.trackId;
@@ -134,7 +153,7 @@
   function routeBlocked(tr, track) {
     var own = G.trackOwner[track.id];
     if (own) return track.short + ' occupied by ' + trName(own);
-    var ent = tr.dir > 0 ? 'W' : 'E', side = ent === 'W' ? 'West' : 'East';
+    var ent = entSide(tr), side = ent === 'W' ? 'West' : 'East';
     var c = throatConflict(ent, tr, track.id);
     if (c) {
       return c.crossing
@@ -162,7 +181,7 @@
     for (i = 0; i < T.length; i++) if (!compat(tr, T[i])) { comp.push(T[i]); minCap = Math.min(minCap, T[i].maxCars); }
 
     G.trackOwner[idx] = tr; tr.holdsTrack = true;
-    var ent = tr.dir > 0 ? 'W' : 'E';
+    var ent = entSide(tr);
     G.throat[ent][slotOf(tr.dir)] = tr; tr.holdsThroat[ent] = true;
     // A yard-origin service is physically leaving its stabling road for
     // good the moment it's called forward — free that road now, or it
@@ -213,6 +232,11 @@
     toast(m.x, m.y - 34, 'CANCELLED −250', 'bad');
     banner('SERVICE CANCELLED', trName(tr) + ' held ' + LATE_MAX + ' minutes at the home signal');
     release(tr);
+    // A departure formed in the yard but never called forward is still
+    // parked there, holding a stabling road that release() above never
+    // touches — leave that held and the yard quietly loses a road for
+    // the rest of the shift.
+    if (tr.yardRoad !== null) { RY.YARD[tr.yardRoad].occupant = null; tr.yardRoad = null; }
     tr.state = 'gone';
     if (G.lives <= 0) gameOver();
   }
@@ -355,7 +379,13 @@
     });
   }
 
+  /* At a terminus, entry and exit share the one throat side, so these
+     generic thresholds (each keyed to a distinct, opposite-end signal
+     that doesn't exist there) don't apply — every lock at a terminus is
+     taken and dropped explicitly at the relevant state transition in
+     updateTrain() instead. */
   function updateResources(tr) {
+    if (RY.station.terminus) return;
     var ent = tr.dir > 0 ? 'W' : 'E', ex = ent === 'W' ? 'E' : 'W', tx = tr.tailX();
     var slot = slotOf(tr.dir);
 
@@ -394,6 +424,13 @@
               G.arrivals++;
               punctual(G.gameT - tr.sched, 120, tr, 'ARRIVED');
             }
+            // At a terminus this train is now well clear of the one
+            // throat it shares with everything else — drop that claim
+            // now rather than holding it for the whole dwell; it (or,
+            // for a yard-formed departure, the exit-side claim) gets
+            // taken fresh when this train actually needs the throat
+            // again (see 'awaitYard'/'awaitDepart' below).
+            if (RY.station.terminus) releaseThroatHold(tr, 'E');
           }
         } else {
           var farSide = tr.dir > 0 ? 'E' : 'W';
@@ -438,7 +475,7 @@
         break;
 
       case 'awaitDepart':
-        var ex = tr.dir > 0 ? 'E' : 'W';
+        var ex = RY.station.terminus ? 'E' : (tr.dir > 0 ? 'E' : 'W');
         if (!throatConflict(ex, tr, tr.trackId)) {
           G.throat[ex][slotOf(tr.dir)] = tr; tr.holdsThroat[ex] = true;
           tr.state = 'depart';
@@ -449,53 +486,38 @@
         break;
 
       case 'depart':
-        // Checked by arc length with a real margin, not by x position at
-        // the exact boundary: the mainline path a terminus arrival is
-        // still on ends only 40px past that boundary (so the yard is
-        // on-canvas rather than an off-stage horizon), which put this in
-        // an outright race with the ordinary "reached the end of the
-        // path" fallback a few lines down — that fallback's own 1-unit
-        // margin doesn't leave this room to ever actually win it.
-        if (RY.station.terminus && tr.yardRoad !== null && !tr.yardSpliced && tr.s >= tr.path.len - 30) {
-          var yr = RY.YARD[tr.yardRoad], hx = tr.headX(), mainY = tr.dir > 0 ? L.mainB : L.mainA;
-          tr.path = RY.spliceLateral(L.yardNear, mainY, yr.y, tr.dir);
-          tr.s = RY.sAtX(tr.path, hx);
-          tr.sSlow = 0; tr.sFast = tr.path.len;
-          tr.targetS = tr.path.len;
-          tr.yardSpliced = true;
-          tr.state = 'toYard';
-          // The yard's visible depth is deliberately shorter than a full
-          // consist (so parked stock still reads on-canvas), which means
-          // the tail can be short of the usual release thresholds even
-          // once "parked" — updateResources()'s ordinary tail-position
-          // checks, gated on 'depart' or a non-stopping service, would
-          // just never fire again once state moves past 'depart', leaving
-          // the platform and throat permanently marked occupied by a
-          // train that's no longer anywhere near either. None of that
-          // matters once a train has committed to the yard, though — it's
-          // fully clear of anything the interlocking still needs to
-          // reason about — so release everything for it right here.
-          release(tr);
-          break;
-        }
         if (tr.s >= tr.path.len - 1) { release(tr); tr.state = 'gone'; }
         break;
 
       /* ---- terminus only, from here down ---- */
 
+      // An arrival that's done unloading isn't going anywhere on the
+      // mainline any more — the platform road simply ends at the buffer
+      // (see buildPath) — so what it needs next is a fresh shunt curve
+      // straight to a stabling road, built from wherever it's actually
+      // standing right now (it's been at rest since 'dwell' began).
       case 'awaitYard':
-        var exY = tr.dir > 0 ? 'E' : 'W', freeRoad = null, fi;
+        var freeRoad = null, fi;
         for (fi = 0; fi < RY.YARD.length; fi++) if (!RY.YARD[fi].occupant) { freeRoad = RY.YARD[fi]; break; }
-        if (freeRoad && !throatConflict(exY, tr, tr.trackId)) {
-          G.throat[exY][slotOf(tr.dir)] = tr; tr.holdsThroat[exY] = true;
+        if (freeRoad && !throatConflict('E', tr, tr.trackId)) {
+          G.throat.E[slotOf(tr.dir)] = tr; tr.holdsThroat.E = true;
           freeRoad.occupant = tr; tr.yardRoad = freeRoad.id;
-          tr.state = 'depart';
-          tr.targetS = Infinity;
+          var from = tr.pos(), parkX = L.yardNear + 250;
+          tr.path = RY.shuntCurve(from.x, from.y, parkX, freeRoad.y);
+          tr.s = 0; tr.sSlow = 0; tr.sFast = tr.path.len;
+          tr.targetS = tr.path.len;
+          tr.state = 'toYard';
+          // The platform is vacated the moment this shunt is committed to
+          // — freeRoad, just claimed above, is the only road this train
+          // owns from here on.
+          if (G.trackOwner[tr.trackId] === tr) G.trackOwner[tr.trackId] = null;
+          tr.holdsTrack = false;
         }
         break;
 
       case 'toYard':
         if (tr.v < 0.6 && tr.s >= tr.targetS - 0.5) {
+          release(tr);   // clear of the throat claim taken in awaitYard
           tr.state = 'parked';
           tr.parkedUntil = G.gameT + 26;
         }
@@ -513,6 +535,11 @@
           tr.yardLinked = true;
           tr.routeTo(T[tr.trackId]);
           tr.state = 'routed';
+          // The shunt from the yard is done — this train is now standing
+          // on its platform, clear of the throat, well before it will
+          // need that same lock again to actually leave (see
+          // 'awaitDepart'). Hold it through the shunt and no longer.
+          releaseThroatHold(tr, 'E');
         }
         break;
     }
@@ -594,7 +621,8 @@
       why = canAssign(G.sel, t);
       col = why ? 'rgba(224,72,50,' : 'rgba(56,190,90,';
       ctx.fillStyle = col + (G.hoverTrack === i ? 0.28 : 0.13) + ')';
-      RY.rr(ctx, L.xThroatW, t.y - 23, L.xThroatE - L.xThroatW, 46, 6);
+      var hlX0 = L.terminus ? RY.platSpan(t).x0 : L.xThroatW;
+      RY.rr(ctx, hlX0, t.y - 23, L.xThroatE - hlX0, 46, 6);
       ctx.fill();
       ctx.strokeStyle = col + (G.hoverTrack === i ? 0.85 : 0.4) + ')';
       ctx.lineWidth = 1.6;
@@ -662,11 +690,34 @@
   }
 
   function drawSignals() {
+    var i;
+    if (L.terminus) {
+      // Both streams share the one throat here, so both signal heads
+      // stand at the same x (xEastHome) — one for arrivals off the
+      // network (G.throat.E.pos), one for departures leaving the same
+      // way (G.throat.E.neg) — offset in y exactly like a through
+      // station's two opposite home signals are.
+      var arr = G.throat.E.pos, dep = G.throat.E.neg;
+      var arrGo = arr && arr.state === 'routed' && !pastSignal(arr, L.xEastHome);
+      var depGo = dep && dep.state === 'depart' && !pastSignal(dep, L.xEastHome);
+      drawSignal(L.xEastHome, L.mainB + 42, arrGo ? 2 : 0, true);
+      drawSignal(L.xEastHome, L.mainA - 42, depGo ? 2 : 0, true);
+      for (i = 0; i < T.length; i++) {
+        var ot = G.trackOwner[i];
+        // Only a real departure gets a starter signal here — an arrival's
+        // yard-bound shunt releases its platform the moment it commits
+        // (see 'awaitYard' in updateTrain), well before it's this signal's
+        // business, exactly like the yard shunt is nobody else's.
+        var goT = ot && ot.dir < 0 && ot.state === 'depart' && !pastSignal(ot, L.xThroatE - 30);
+        drawSignal(L.xThroatE - 30, T[i].y - 34, goT ? 2 : 0, true);
+      }
+      return;
+    }
     // G.throat.W.pos only ever holds a dir>0 (west-entering) train, and
     // G.throat.E.neg only ever a dir<0 (east-entering) one — see slotOf —
     // so the home signal is exactly this train's clearance, not some other
     // road's, however many services are queued behind it at the signal.
-    var wArr = G.throat.W.pos, eArr = G.throat.E.neg, i;
+    var wArr = G.throat.W.pos, eArr = G.throat.E.neg;
     var wGo = wArr && wArr.state === 'routed' && !pastSignal(wArr, L.xWestHome);
     var eGo = eArr && eArr.state === 'routed' && !pastSignal(eArr, L.xEastHome);
     drawSignal(L.xWestHome, L.mainB + 42, wGo ? 2 : 0, true);
@@ -848,14 +899,18 @@
       ctx.fillText('press space, or the button above, to resume', RY.W / 2, RY.H / 2 + 26);
     }
 
-    // direction reminders at the line ends
+    // direction reminders at the line ends — a terminus has nothing at
+    // the west end at all, and everything (network and yard alike) on
+    // the one east side.
     ctx.save();
     ctx.font = '700 11px ui-monospace, monospace';
     ctx.fillStyle = 'rgba(190,202,216,.55)';
-    ctx.textAlign = 'left';
-    ctx.fillText('▶  FROM THE WEST', 12, L.mainB + 66);
+    if (!L.terminus) {
+      ctx.textAlign = 'left';
+      ctx.fillText('▶  FROM THE WEST', 12, L.mainB + 66);
+    }
     ctx.textAlign = 'right';
-    ctx.fillText('FROM THE EAST  ◀', RY.W - 12, L.mainA - 54);
+    ctx.fillText((L.terminus ? 'NETWORK & YARD' : 'FROM THE EAST') + '  ◀', RY.W - 12, L.mainA - 54);
     ctx.restore();
   }
 
@@ -960,8 +1015,16 @@
     return best;
   }
   function hitTrack(wx, wy) {
+    var i;
+    if (L.terminus) {
+      if (wx > L.xThroatE) return -1;
+      for (i = 0; i < T.length; i++) {
+        if (Math.abs(wy - T[i].y) < 30 && wx >= RY.platSpan(T[i]).x0) return i;
+      }
+      return -1;
+    }
     if (wx < L.xThroatW || wx > L.xThroatE) return -1;
-    for (var i = 0; i < T.length; i++) if (Math.abs(wy - T[i].y) < 30) return i;
+    for (i = 0; i < T.length; i++) if (Math.abs(wy - T[i].y) < 30) return i;
     return -1;
   }
 

@@ -368,24 +368,34 @@
     }
   }
 
+  /* A buffer stop: red-and-white striped block marking where a rail
+     genuinely ends. Used both at the end of a stabling road and — at a
+     terminus — at the dead end of every platform. */
+  function drawBuffer(ctx, x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-3, -13, 8, 28);
+    ctx.fillStyle = '#3a3f46'; ctx.fillRect(-4, -14, 8, 28);
+    ctx.fillStyle = '#c8382c'; ctx.fillRect(-4, -14, 8, 5);
+    ctx.fillStyle = 'rgba(255,255,255,.5)';
+    ctx.fillRect(-4, -8, 8, 2); ctx.fillRect(-4, 2, 8, 2);
+    ctx.restore();
+  }
+
   /* The stabling yard, terminus stations only. The sidings themselves are
      already baked as ordinary trackwork (see buildTrackwork) — this adds
      the buffer stops that mark where a shunt has to stop, and a sign
      naming the place, since it's really a whole depot standing in. */
   function drawYard(ctx) {
     var i, yr, x = L.yardFar;
-    for (i = 0; i < RY.YARD.length; i++) {
-      yr = RY.YARD[i];
-      ctx.save();
-      ctx.translate(x, yr.y);
-      ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-3, -13, 8, 28);
-      ctx.fillStyle = '#3a3f46'; ctx.fillRect(-4, -14, 8, 28);
-      ctx.fillStyle = '#c8382c'; ctx.fillRect(-4, -14, 8, 5);
-      ctx.fillStyle = 'rgba(255,255,255,.5)';
-      ctx.fillRect(-4, -8, 8, 2); ctx.fillRect(-4, 2, 8, 2);
-      ctx.restore();
-    }
+    for (i = 0; i < RY.YARD.length; i++) { yr = RY.YARD[i]; drawBuffer(ctx, x, yr.y); }
     signPlate(ctx, (L.yardNear + L.yardFar) / 2, RY.YARD[0].y - 46, 'BASIN BRIDGE YARD · STABLING', '#233047');
+  }
+
+  /* Every terminus platform dead-ends at its own buffer, on the west —
+     there is no west throat to draw instead (see buildPath/buildTrackwork). */
+  function drawPlatformBuffers(ctx) {
+    for (var i = 0; i < T.length; i++) drawBuffer(ctx, RY.platSpan(T[i]).x0, T[i].y);
   }
 
   /* A lattice footbridge spanning the whole station.  Drawn over the
@@ -567,32 +577,38 @@
     for (i = 0; i < segs.length; i++) drawSleepers(ctx, segs[i], rnd);
     for (i = 0; i < segs.length; i++) drawRails(ctx, segs[i]);
 
-    // turnout blades where the ladders leave the mains
+    // turnout blades where the ladders leave the mains — a terminus has
+    // no west ladder to draw blades for at all (see buildTrackwork).
     for (i = 0; i < T.length; i++) {
       var oA = RY.divOff(L.mainA, T[i].y), oB = RY.divOff(L.mainB, T[i].y);
-      drawBlades(ctx, L.xWestHome + oA, L.mainA, T[i].y,  1);
-      drawBlades(ctx, L.xWestHome + oB, L.mainB, T[i].y,  1);
+      if (!L.terminus) {
+        drawBlades(ctx, L.xWestHome + oA, L.mainA, T[i].y,  1);
+        drawBlades(ctx, L.xWestHome + oB, L.mainB, T[i].y,  1);
+      }
       drawBlades(ctx, L.xEastHome - oA, L.mainA, T[i].y, -1);
       drawBlades(ctx, L.xEastHome - oB, L.mainB, T[i].y, -1);
     }
 
     // OLE over the running lines
-    drawOLE(ctx, RY.makePath([{ x: 0, y: L.mainA }, { x: L.xWestHome + 40, y: L.mainA }]));
-    drawOLE(ctx, RY.makePath([{ x: 0, y: L.mainB }, { x: L.xWestHome + 40, y: L.mainB }]));
+    if (!L.terminus) {
+      drawOLE(ctx, RY.makePath([{ x: 0, y: L.mainA }, { x: L.xWestHome + 40, y: L.mainA }]));
+      drawOLE(ctx, RY.makePath([{ x: 0, y: L.mainB }, { x: L.xWestHome + 40, y: L.mainB }]));
+    }
     drawOLE(ctx, RY.makePath([{ x: L.xEastHome - 40, y: L.mainA }, { x: RY.W, y: L.mainA }]));
     drawOLE(ctx, RY.makePath([{ x: L.xEastHome - 40, y: L.mainB }, { x: RY.W, y: L.mainB }]));
     for (i = 0; i < T.length; i++) {
-      drawOLE(ctx, RY.makePath([{ x: L.xThroatW, y: T[i].y }, { x: L.xThroatE, y: T[i].y }]));
+      var oleWest = L.terminus ? RY.platSpan(T[i]).x0 : L.xThroatW;
+      drawOLE(ctx, RY.makePath([{ x: oleWest, y: T[i].y }, { x: L.xThroatE, y: T[i].y }]));
     }
 
     drawTroughing(ctx, T[0].y - 40, 0, RY.W);
     drawTroughing(ctx, T[T.length - 1].y + 32, 0, RY.W);
-    drawTroughing(ctx, L.mainB + 34, 0, L.xWestHome + L.maxDiv);
+    if (!L.terminus) drawTroughing(ctx, L.mainB + 34, 0, L.xWestHome + L.maxDiv);
     drawTroughing(ctx, L.mainB + 34, L.xEastHome - L.maxDiv, RY.W);
 
     for (i = 0; i < RY.ISLANDS.length; i++) drawIsland(ctx, RY.ISLANDS[i], rnd);
     for (i = 0; i < T.length; i++) if (!T[i].platform) drawThroughRoadSign(ctx, T[i]);
-    if (RY.station.terminus) drawYard(ctx);
+    if (RY.station.terminus) { drawYard(ctx); drawPlatformBuffers(ctx); }
 
     drawBuildings(ctx, rnd);
 
