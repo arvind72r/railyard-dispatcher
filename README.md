@@ -39,9 +39,10 @@ through," and nothing ever enters or leaves from the west at all. What
 happens instead:
 
 - An arrival **calls**, unloads, and is then shunted back out through that
-  same east throat to a stabling yard behind the station (nodded to here as
-  Basin Bridge, where the real station's coach care depot actually is)
-  rather than vanishing off toward another destination.
+  same east throat to Basin Bridge yard behind the station — which is where
+  the stabling really is, immediately north of the terminus. The real yard
+  runs to about 41 roads at its widest on 5–6 m centres, tapering to 12 at
+  the throats; the eight here are a playable miniature of that.
 - A departure is **formed** in that yard ahead of time — it appears in the
   Train Register as soon as it's ready to be called forward, with its
   booked departure time shown, and you assign it a platform exactly like an
@@ -52,14 +53,41 @@ happens instead:
   from it are, geometrically, just another pair of routes that can or can't
   share the throat at the same time.
 
-Two honesty notes, since this one is modelled on somewhere real:
+#### Where the shape of it comes from
 
-- The **platform count and relative layout** (twelve mainline platforms,
-  numbered 1–11 with a shorter 2A) follow the real station, but the exact
-  pointwork — which turnout sits where, precisely how the yard throat is
-  arranged — isn't public information, so this is a faithful likeness built
-  from the same road-list generator as every other station, not a
-  survey-accurate reproduction.
+The layout is **measured, not guessed**. It is derived from an OSM-based
+survey of the Chennai Central–Villivakkam corridor: rotating that data into
+a frame aligned with the platform bearing (8.9° west of north) and cutting a
+cross-section through the terminus settles three things outright.
+
+- **It really is single-ended.** Sixteen buffer stops sit at the south end
+  and every road fans north into one throat. That is why this station is
+  modelled with dead ends on one side and all access — network *and* yard —
+  on the other.
+- **The platform lengths are real.** The six long main-line faces measure
+  522, 549, 602, 608, 617 and 694 metres. Scaled against the longest, that
+  is 5.3, 5.5, 6.1, 6.1, 6.2 and 7.0 game cars — so the mix of 5-, 6- and
+  7-car roads here is the actual length distribution, and the short 2A bay
+  (262 m on the ground) is genuinely that much shorter than the rest. It is
+  why a sleeper can only be berthed on roads 1–8 and why 2A is the awkward
+  one, rather than every platform being interchangeable.
+- **The stagger is real.** Because the roads all meet the throat but end at
+  their own buffers, the dead ends step back by road length — about 85 m of
+  stagger on the ground, which is what you see drawn.
+
+Three honesty notes, since this one is modelled on somewhere real:
+
+- The survey holds about **11 of the complex's ~17–19 roads** — there are
+  28 m and 62 m gaps in the cross-section where roads are plainly missing —
+  so the twelve here are the real station's count rather than the six long
+  faces the data actually captured. The **pointwork is still conventional**:
+  which turnout sits where is generated the same way as at every other
+  station, not traced.
+- The survey's **platform numbering is unusable** — it interleaves MAS and
+  Moore Market Complex refs across the one fan (and its `platform 1`–`12`
+  group is Chennai Egmore, not Central). So the numbers here follow the real
+  station's 1, 2, 2A, 3–11, and which number sits on which physical road is
+  conventional rather than something the data asserts.
 - The **timetable is representative, not authoritative or live**. Indian
   Railways doesn't publish a fixed train-to-platform pairing in the first
   place (platforms are assigned on the day — which is the job here), and

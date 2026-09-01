@@ -112,27 +112,53 @@
        or ends there (an arrival stabled once it's unloaded). See
        layoutStation()'s terminus branch and applyStation() for the yard
        geometry, and game.js's timetable scheduler for how services move
-       between the two. Platform count, relative lengths and names follow
-       MGR Chennai Central's real 12 mainline platforms (1, 2, 2A, 3–11);
-       the exact pointwork and the day's real service list aren't public
-       data, so both are a faithful, clearly-not-authoritative likeness
-       rather than a survey-accurate one. */
+       between the two.
+
+       The shape of this one is measured, not guessed. Taking the platform
+       and track geometry out of an OSM-derived survey of the Chennai
+       Central–Villivakkam corridor, rotating into a frame aligned with the
+       platform bearing (8.9 degrees west of north) and cutting a
+       cross-section through the terminus gives, unambiguously: buffer
+       stops at the south end with the roads fanning north into one
+       throat — which is why this is modelled single-ended — and two
+       distinct groups of road, a western suburban one at 13-16m track
+       centres carrying short faces (282-368m) and an eastern main-line
+       one carrying long ones. Those six long faces measure 522, 549,
+       602, 608, 617 and 694 metres, which scaled against the longest is
+       5.3, 5.5, 6.1, 6.1, 6.2 and 7.0 game cars — so the maxCars spread
+       below is the real length distribution, not a flat guess, and the
+       262m bay that becomes 2A is really that much shorter than the rest.
+
+       Two things the survey could NOT settle, so they are conventional:
+       it holds about 11 of the complex's ~17-19 roads (there are 28m and
+       62m gaps in the cross-section where roads are plainly missing), so
+       the count here is the real 12 rather than the 6 long faces it
+       actually captured; and its platform numbering interleaves MAS and
+       Moore Market Complex refs across the one fan, so which number sits
+       on which physical road follows the real station's 1, 2, 2A, 3-11
+       rather than anything the file asserts. The day's real service list
+       isn't public data either — see the timetable note below. */
     {
-      id: 'mgrchennai', name: 'MGR Chennai Central', difficulty: 'Advanced', terminus: true, yard: 6,
+      id: 'mgrchennai', name: 'MGR Chennai Central', difficulty: 'Advanced', terminus: true, yard: 8,
       blurb: 'A real terminus, in miniature — twelve dead-end platforms and a stabling yard.',
+      /* maxCars follows the measured face lengths above: two of the 694m
+         class, six of the ~600m class, three of the 520-550m class, and
+         2A as the short bay. (2A measures 2.6 cars; it is set to 4 — the
+         shortest booked service — because a 3-car road would be one no
+         train in the timetable could ever use.) */
       tracks: [
         { short: '1',  name: 'Platform 1',  maxCars: 7, platform: true },
         { short: '2',  name: 'Platform 2',  maxCars: 7, platform: true },
-        { short: '2A', name: 'Platform 2A', maxCars: 5, platform: true },
-        { short: '3',  name: 'Platform 3',  maxCars: 7, platform: true },
-        { short: '4',  name: 'Platform 4',  maxCars: 7, platform: true },
-        { short: '5',  name: 'Platform 5',  maxCars: 7, platform: true },
-        { short: '6',  name: 'Platform 6',  maxCars: 7, platform: true },
-        { short: '7',  name: 'Platform 7',  maxCars: 7, platform: true },
-        { short: '8',  name: 'Platform 8',  maxCars: 7, platform: true },
-        { short: '9',  name: 'Platform 9',  maxCars: 7, platform: true },
-        { short: '10', name: 'Platform 10', maxCars: 7, platform: true },
-        { short: '11', name: 'Platform 11', maxCars: 7, platform: true }
+        { short: '2A', name: 'Platform 2A', maxCars: 4, platform: true },
+        { short: '3',  name: 'Platform 3',  maxCars: 6, platform: true },
+        { short: '4',  name: 'Platform 4',  maxCars: 6, platform: true },
+        { short: '5',  name: 'Platform 5',  maxCars: 6, platform: true },
+        { short: '6',  name: 'Platform 6',  maxCars: 6, platform: true },
+        { short: '7',  name: 'Platform 7',  maxCars: 6, platform: true },
+        { short: '8',  name: 'Platform 8',  maxCars: 6, platform: true },
+        { short: '9',  name: 'Platform 9',  maxCars: 5, platform: true },
+        { short: '10', name: 'Platform 10', maxCars: 5, platform: true },
+        { short: '11', name: 'Platform 11', maxCars: 5, platform: true }
       ],
       islands: [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11]],
       /* A representative morning service block, not a live or authoritative
