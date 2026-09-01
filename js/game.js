@@ -1236,7 +1236,10 @@
   function renderStationPicker() {
     var wrap = document.getElementById('stationPicker');
     if (!wrap) return;
-    wrap.innerHTML = RY.STATIONS.map(function (s) {
+    // A station marked `hidden` is fully built and playable — it just
+    // isn't offered here (see its entry in geom.js for why). Everything
+    // else about it still works, so unhiding is a one-word change.
+    wrap.innerHTML = RY.STATIONS.filter(function (s) { return !s.hidden; }).map(function (s) {
       var plats = s.tracks.filter(function (t) { return t.platform; }).length;
       var thru = s.tracks.length - plats;
       return '<button type="button" class="stn' + (s.id === selectedStationId ? ' sel' : '') +

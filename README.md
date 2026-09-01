@@ -7,7 +7,7 @@ station efficiently; three cancelled services and your shift is over.
 
 ## Choosing a station
 
-The opening screen offers five stations, each a genuinely different track
+The opening screen offers four stations, each a genuinely different track
 layout rather than a reskin — the number of roads, how many are through roads
 versus platforms, where those through roads sit, and how the platforms pair
 into islands are all different:
@@ -18,7 +18,13 @@ into islands are all different:
 | Bramwell Halt         | Beginner  | 3     | One siding, one island — learn the board.     |
 | Northgate Junction    | Advanced  | 7     | One through road, three islands — busy.       |
 | Selby Yard            | Standard  | 4     | A through road at each end, one island between.|
-| MGR Chennai Central   | Advanced  | 12    | A real terminus, with a stabling yard behind it.|
+
+A fifth, **MGR Chennai Central** (12 roads, a real terminus with a stabling
+yard), is built and working but **not currently on the menu** — a different
+style of play is being worked out for it. It is hidden by a single `hidden:
+true` on its entry in `js/geom.js`; nothing else about it is switched off,
+and deleting that line puts it straight back. The section below describes it
+as it stands.
 
 Every through station is generated from its road list alone — how many roads,
 which are platforms, and which pairs of platforms share an island — so the
@@ -28,6 +34,8 @@ happens from the start screen or after a shift ends; the "?" button mid-shift
 shows the rules again without offering to swap the layout out from under you.
 
 ### MGR Chennai Central is a different kind of station
+
+*(Currently hidden from the station picker — see above.)*
 
 The other four are all *through* stations — a train can enter one end and
 carry on out the other, with the network on the west and again on the east.

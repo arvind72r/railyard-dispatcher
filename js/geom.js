@@ -139,7 +139,12 @@
        rather than anything the file asserts. The day's real service list
        isn't public data either — see the timetable note below. */
     {
+      /* hidden: kept out of the station picker while a different style of
+         play is worked out for it. Nothing else is switched off — the
+         layout, the yard cycle and the timetable all still work, and
+         removing this one line puts it back on the menu. */
       id: 'mgrchennai', name: 'MGR Chennai Central', difficulty: 'Advanced', terminus: true, yard: 8,
+      hidden: true,
       blurb: 'A real terminus, in miniature — twelve dead-end platforms and a stabling yard.',
       /* maxCars follows the measured face lengths above: two of the 694m
          class, six of the ~600m class, three of the 520-550m class, and
