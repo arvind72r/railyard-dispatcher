@@ -944,17 +944,25 @@
       return;
     }
     /* Two lines per entry: the first identifies the service — which way it
-       is running, what it is called, and the road it is on — and the second
-       carries its formation and current status. The roads it *could* take
-       aren't listed here; selecting it lights the assignable ones up on the
-       road buttons below, and its canvas label spells them out. */
-    var html = '', i, tr, st;
+       is running, what it is called, where it runs between, and the road it
+       is on — and the second carries its formation and current status. The
+       roads it *could* take aren't listed here; selecting it lights the
+       assignable ones up on the road buttons below, and its canvas label
+       spells them out.
+
+       A timetabled terminus service shows no origin/destination: its name
+       already is its route ("Chennai–Howrah Mail"), and the random pair
+       every train is otherwise given would be noise beside it. Those rows
+       let the name take the slack instead. */
+    var html = '', i, tr, st, route;
     for (i = 0; i < list.length; i++) {
       tr = list[i]; st = statusOf(tr);
+      route = tr.svcName ? '' : tr.origin + ' → ' + tr.dest;
       html += '<div class="row' + (G.sel === tr ? ' sel' : '') + '" data-id="' + tr.id +
               '" style="border-left-color:' + tr.cfg.body + '">' +
         '<div class="r1"><span class="dir">' + (tr.dir > 0 ? '▶' : '◀') + '</span>' +
-        '<span class="code">' + (tr.svcName || tr.code) + '</span>' +
+        '<span class="code' + (route ? '' : ' grow') + '">' + (tr.svcName || tr.code) + '</span>' +
+        (route ? '<span class="route">' + route + '</span>' : '') +
         '<span class="road">' + (tr.trackId !== null ? T[tr.trackId].short : '—') + '</span></div>' +
         '<div class="r2"><span class="kind">' + tr.cfg.label + ' · ' + tr.cars + ' cars · ' +
         fmtTime(tr.svcName ? (tr.dir > 0 ? tr.sched : tr.schedDep) : tr.sched) + '</span>' +
