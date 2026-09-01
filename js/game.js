@@ -943,23 +943,22 @@
       elBoard.innerHTML = '<div class="empty">No services on the panel.<br>Stand by.</div>';
       return;
     }
+    /* Two lines per entry: the first identifies the service — which way it
+       is running, what it is called, and the road it is on — and the second
+       carries its formation and current status. The roads it *could* take
+       aren't listed here; selecting it lights the assignable ones up on the
+       road buttons below, and its canvas label spells them out. */
     var html = '', i, tr, st;
     for (i = 0; i < list.length; i++) {
       tr = list[i]; st = statusOf(tr);
-      var roads = eligible(tr).map(function (k) { return k.short; }).join(' ');
       html += '<div class="row' + (G.sel === tr ? ' sel' : '') + '" data-id="' + tr.id +
               '" style="border-left-color:' + tr.cfg.body + '">' +
-        '<div class="r1"><span class="code">' + (tr.svcName || tr.code) + '</span>' +
-        '<span class="sched">' + fmtTime(tr.svcName ? (tr.dir > 0 ? tr.sched : tr.schedDep) : tr.sched) + '</span></div>' +
-        '<div class="r2"><span class="kind">' + tr.cfg.label + ' · ' + tr.cars + ' cars</span>' +
-        '<span class="stat2 ' + st[1] + '">' + st[0] + '</span></div>' +
-        '<div class="r3"><span>' + (tr.svcName
-          ? (tr.dir > 0 ? '▶ off the network' : '◀ forming for departure')
-          : (tr.dir > 0 ? '▶ ' : '◀ ') + tr.origin + ' → ' + tr.dest) + '</span>' +
+        '<div class="r1"><span class="dir">' + (tr.dir > 0 ? '▶' : '◀') + '</span>' +
+        '<span class="code">' + (tr.svcName || tr.code) + '</span>' +
         '<span class="road">' + (tr.trackId !== null ? T[tr.trackId].short : '—') + '</span></div>' +
-        '<div class="r4"><span class="calls ' + (tr.stops ? 'c-stop' : 'c-pass') + '">' +
-        (tr.stops ? 'CALLS' : 'RUNS THROUGH') + '</span>' +
-        '<span class="roads">' + roads + '</span></div>' +
+        '<div class="r2"><span class="kind">' + tr.cfg.label + ' · ' + tr.cars + ' cars · ' +
+        fmtTime(tr.svcName ? (tr.dir > 0 ? tr.sched : tr.schedDep) : tr.sched) + '</span>' +
+        '<span class="stat2 ' + st[1] + '">' + st[0] + '</span></div>' +
         '</div>';
     }
     elBoard.innerHTML = html;
