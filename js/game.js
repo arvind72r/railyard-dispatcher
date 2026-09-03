@@ -35,7 +35,7 @@
     trains: [], trackOwner: freshTrackOwner(),
     throat: { W: { pos: null, neg: null }, E: { pos: null, neg: null } },
     gameT: 360, elapsed: 0, level: 1, score: 0, lives: 3, combo: 0,
-    onTime: 0, events: 0, arrivals: 0,
+    onTime: 0, events: 0, arrivals: 0, dispatched: 0, cancelled: 0,
     spawnIn: 2.5, sel: null, hoverTrack: -1, hoverTrain: null,
     night: 0, fullHouse: false, people: [], lastBoard: 0, ttDone: []
   };
@@ -237,6 +237,8 @@
     // touches — leave that held and the yard quietly loses a road for
     // the rest of the shift.
     if (tr.yardRoad !== null) { RY.YARD[tr.yardRoad].occupant = null; tr.yardRoad = null; }
+    // Tallied when it actually leaves the list, not here — see update().
+    tr.cancelled = true;
     tr.state = 'gone';
     if (G.lives <= 0) gameOver();
   }
@@ -604,7 +606,15 @@
     for (i = 0; i < G.trains.length; i++) {
       if (G.trains[i].state !== 'gone') updateTrain(G.trains[i], dt);
     }
-    G.trains = G.trains.filter(function (t) { return t.state !== 'gone'; });
+    /* Every service leaves the list exactly once, and by exactly one of two
+       routes: it ran its course, or it was cancelled under it. Tallying
+       here rather than at each of the several places that set 'gone' means
+       neither counter can drift or double-count. */
+    G.trains = G.trains.filter(function (t) {
+      if (t.state !== 'gone') return true;
+      if (t.cancelled) G.cancelled++; else G.dispatched++;
+      return false;
+    });
     if (G.sel && G.sel.state !== 'approach') G.sel = null;
 
     checkFullHouse();
@@ -1006,6 +1016,8 @@
     document.getElementById('s-combo').textContent = '×' + mult().toFixed(1);
     document.getElementById('s-lives').textContent =
       '●●●'.slice(0, Math.max(0, G.lives)) + '○○○'.slice(0, Math.max(0, 3 - G.lives));
+    document.getElementById('s-disp').textContent = G.dispatched;
+    document.getElementById('s-canc').textContent = G.cancelled;
   }
 
   /* ================= input ================= */
@@ -1278,6 +1290,7 @@
     G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } };
     G.gameT = 360; G.elapsed = 0; G.level = 1; G.score = 0; G.lives = 3;
     G.combo = 0; G.onTime = 0; G.events = 0; G.arrivals = 0;
+    G.dispatched = 0; G.cancelled = 0;
     G.spawnIn = 2.0; G.sel = null; G.night = 0; G.fullHouse = false;
     G.ttDone = def.terminus ? def.timetable.map(function () { return false; }) : [];
     makePeople();
