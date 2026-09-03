@@ -44,6 +44,18 @@ body{
 .lives span{color:var(--red);letter-spacing:2px}
 #s-disp{color:var(--green)}
 .late span{color:var(--red)}
+/* The combo readout carries a two-decimal multiplier and the streak, which
+   is the widest value on the bar; below full width, tighten the spacing and
+   the digits rather than let any number clip. */
+@media (max-width:1240px){
+  .stats{gap:10px}
+  .stat span{font-size:15px}
+}
+@media (max-width:1060px){
+  .stats{gap:7px}
+  .stat span{font-size:14px}
+  .stat label{font-size:8px;letter-spacing:.1em}
+}
 .ctrls{display:flex;gap:8px;align-items:center}
 .vol{
   display:flex;align-items:center;gap:7px;padding:0 9px 0 3px;height:34px;

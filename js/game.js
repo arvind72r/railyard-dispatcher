@@ -1047,7 +1047,13 @@
     document.getElementById('s-level').textContent = G.level;
     document.getElementById('s-punct').textContent =
       G.events ? Math.round(G.onTime / G.events * 100) + '%' : '—';
-    document.getElementById('s-combo').textContent = '×' + mult().toFixed(1);
+    // Two decimals, and the streak itself alongside: the bonus steps by 0.08
+    // and caps at twelve, so a rounded one-decimal multiplier on its own sat
+    // unchanged through 2->3, 7->8 and every increment past the cap — which
+    // reads as a combo that failed to count, especially when two services
+    // score moments apart and you are watching this very number.
+    document.getElementById('s-combo').textContent =
+      '×' + mult().toFixed(2) + ' · ' + G.combo;
     document.getElementById('s-lives').textContent =
       '●●●'.slice(0, Math.max(0, G.lives)) + '○○○'.slice(0, Math.max(0, 3 - G.lives));
     document.getElementById('s-disp').textContent = G.dispatched;
