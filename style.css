@@ -43,7 +43,7 @@ body{
 #s-score{color:var(--green)}
 .lives span{color:var(--red);letter-spacing:2px}
 #s-disp{color:var(--green)}
-.canc span{color:var(--red)}
+.late span{color:var(--red)}
 .ctrls{display:flex;gap:8px;align-items:center}
 .vol{
   display:flex;align-items:center;gap:7px;padding:0 9px 0 3px;height:34px;
