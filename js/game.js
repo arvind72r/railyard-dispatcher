@@ -576,6 +576,23 @@
     }
   }
 
+  /* Every service leaves the list exactly once, and by exactly one of two
+     routes: it ran its course, or it was cancelled under it. Tallying here
+     rather than at each of the several places that set 'gone' means neither
+     counter can drift or double-count.
+
+     gameOver() flushes this before drawing its summary: the cancellation
+     that ends a shift happens mid-way through the train loop below, so
+     without a flush the final report would be built from counts that are
+     still one tick behind the shift it is reporting on. */
+  function sweepFinished() {
+    G.trains = G.trains.filter(function (t) {
+      if (t.state !== 'gone') return true;
+      if (t.cancelled) G.cancelled++; else G.dispatched++;
+      return false;
+    });
+  }
+
   function update(dt) {
     G.elapsed += dt;
     G.gameT += dt * MINS_PER_SEC;
@@ -606,15 +623,7 @@
     for (i = 0; i < G.trains.length; i++) {
       if (G.trains[i].state !== 'gone') updateTrain(G.trains[i], dt);
     }
-    /* Every service leaves the list exactly once, and by exactly one of two
-       routes: it ran its course, or it was cancelled under it. Tallying
-       here rather than at each of the several places that set 'gone' means
-       neither counter can drift or double-count. */
-    G.trains = G.trains.filter(function (t) {
-      if (t.state !== 'gone') return true;
-      if (t.cancelled) G.cancelled++; else G.dispatched++;
-      return false;
-    });
+    sweepFinished();
     if (G.sel && G.sel.state !== 'approach') G.sel = null;
 
     checkFullHouse();
@@ -1219,11 +1228,13 @@
   function gameOver() {
     G.state = 'over';
     RY.audio.suspend();   // cut instantly rather than waiting for the next frame
+    sweepFinished();      // count the service whose cancellation just ended this
     elOverlay.innerHTML =
       '<div class="card"><h1>SHIFT <em>ENDED</em></h1>' +
       '<p class="tag">Three services cancelled. Control has been relieved.</p>' +
       '<div class="final">' +
       '<div><label>Final score</label><span>' + Math.max(0, Math.round(G.score)).toLocaleString() + '</span></div>' +
+      '<div><label>Trains dispatched</label><span>' + G.dispatched + '</span></div>' +
       '<div><label>Shifts worked</label><span>' + G.level + '</span></div>' +
       '<div><label>Trains handled</label><span>' + G.arrivals + '</span></div>' +
       '<div><label>Punctuality</label><span>' + (G.events ? Math.round(G.onTime / G.events * 100) : 0) + '%</span></div>' +
