@@ -132,6 +132,9 @@
     this.yardLinked = false;
     this.parkedUntil = 0;
     this.svcName = null;
+    // Set once, the first time this service falls behind its booked time —
+    // see markLate() in game.js, which tallies each late service once.
+    this.lateFlag = false;
   }
   RY.Train = Train;
 

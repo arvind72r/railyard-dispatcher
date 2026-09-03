@@ -36,7 +36,7 @@
     trains: [], trackOwner: freshTrackOwner(),
     throat: { W: { pos: null, neg: null }, E: { pos: null, neg: null } },
     gameT: 360, elapsed: 0, level: 1, score: 0, lives: 3, combo: 0,
-    onTime: 0, events: 0, arrivals: 0, dispatched: 0,
+    onTime: 0, events: 0, arrivals: 0, dispatched: 0, late: 0,
     spawnIn: 2.5, sel: null, hoverTrack: -1, hoverTrain: null,
     night: 0, fullHouse: false, people: [], lastBoard: 0, ttDone: []
   };
@@ -217,7 +217,7 @@
     else if (delay <= 2.5)  { pts = Math.round(base * (1 - delay * 0.15));  tag = '+' + delay.toFixed(1) + ' MIN'; good = true; }
     else                    { pts = Math.max(15, Math.round(base - delay * 22)); tag = 'LATE ' + delay.toFixed(0) + ' MIN'; good = false; }
 
-    if (good) G.combo++; else G.combo = 0;
+    if (good) G.combo++; else { G.combo = 0; countLate(tr); }
     pts = Math.round(pts * mult());
     G.score += pts;
     G.events++; if (good) G.onTime++;
@@ -406,7 +406,31 @@
     }
   }
 
+  /* Overdue at the home signal, waiting on a road — what the register
+     shows as DELAYED, and what turns into a strike if left long enough. */
+  function overdue(tr) {
+    return tr.state === 'approach' && G.gameT - tr.sched > LATE_AFTER;
+  }
+
+  /* The top bar's count is a tally, not a gauge: each service is counted
+     once, the first time it is either flagged DELAYED at the signal or
+     scored late on the day (see punctual). Counting only what is late right
+     now would read zero for a dispatcher who keeps the signal clear but
+     still runs services late through the platforms, and would empty itself
+     the moment a late train left — just as you looked for the number.
+
+     Both triggers are things the game already tells you about, so the count
+     can never claim more lateness than the register and the toasts do. In
+     particular a service still inside its booked dwell is not late for
+     having a departure time in the future. */
+  function countLate(tr) {
+    if (tr.lateFlag) return;
+    tr.lateFlag = true;
+    G.late++;
+  }
+
   function updateTrain(tr, dt) {
+    if (overdue(tr)) countLate(tr);
     if (tr.flash > 0) tr.flash -= dt;
 
     switch (tr.state) {
@@ -935,28 +959,10 @@
   }
 
   /* ================= HUD ================= */
-  /* Whether a service is overdue waiting on you: standing at the home
-     signal without a road, or — at a terminus — sitting in the yard past
-     the point it should have been called forward. That is the lateness the
-     dispatcher is accountable for, and the only kind that turns into a
-     strike if left long enough (see LATE_MAX in updateTrain's 'approach').
-     A train already on its road is running to the interlocking's timing
-     rather than yours, so it is not counted here however long the throat
-     makes it wait. statusOf's DELAYED badge is this same test, so the
-     number in the top bar always equals the rows flagged in the register. */
-  function late(tr) {
-    return tr.state === 'approach' && G.gameT - tr.sched > LATE_AFTER;
-  }
-  function lateCount() {
-    var n = 0, i;
-    for (i = 0; i < G.trains.length; i++) if (late(G.trains[i])) n++;
-    return n;
-  }
-
   function statusOf(tr) {
     if (tr.state === 'approach') {
-      if (tr.yardOrigin) return late(tr) ? ['DELAYED', 'st-late'] : ['IN YARD', 'st-wait'];
-      return late(tr) ? ['DELAYED', 'st-late'] : ['WAITING', 'st-wait'];
+      if (tr.yardOrigin) return overdue(tr) ? ['DELAYED', 'st-late'] : ['IN YARD', 'st-wait'];
+      return overdue(tr) ? ['DELAYED', 'st-late'] : ['WAITING', 'st-wait'];
     }
     if (tr.state === 'toPlatform') return ['FORMING', 'st-run'];
     if (tr.state === 'routed') {
@@ -1045,7 +1051,7 @@
     document.getElementById('s-lives').textContent =
       '●●●'.slice(0, Math.max(0, G.lives)) + '○○○'.slice(0, Math.max(0, 3 - G.lives));
     document.getElementById('s-disp').textContent = G.dispatched;
-    document.getElementById('s-late').textContent = lateCount();
+    document.getElementById('s-late').textContent = G.late;
   }
 
   /* ================= input ================= */
@@ -1320,7 +1326,7 @@
     G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } };
     G.gameT = 360; G.elapsed = 0; G.level = 1; G.score = 0; G.lives = 3;
     G.combo = 0; G.onTime = 0; G.events = 0; G.arrivals = 0;
-    G.dispatched = 0;
+    G.dispatched = 0; G.late = 0;
     G.spawnIn = 2.0; G.sel = null; G.night = 0; G.fullHouse = false;
     G.ttDone = def.terminus ? def.timetable.map(function () { return false; }) : [];
     makePeople();
