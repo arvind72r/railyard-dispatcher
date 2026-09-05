@@ -119,6 +119,22 @@
     // routine release of holdsThroat far downstream can't be mistaken for
     // a fresh arrival at the gate and yank the train backwards.
     this.gateCleared = false;
+
+    // Terminus-only: a service formed in the yard rather than arriving off
+    // the main starts parked on a yard road (see game.js's scheduleTimetable),
+    // and its first routeTo() is a shunt move onto its platform rather
+    // than the usual mainline path — see routeTo() below. yardRoad is the
+    // stabling road it currently owns, whichever end of its journey that's
+    // at; svcName is the real timetable name shown in place of the random
+    // service code, for services spawned that way.
+    this.yardOrigin = false;
+    this.yardRoad = null;
+    this.yardLinked = false;
+    this.parkedUntil = 0;
+    this.svcName = null;
+    // Set once, the first time this service falls behind its booked time —
+    // see markLate() in game.js, which tallies each late service once.
+    this.lateFlag = false;
   }
   RY.Train = Train;
 
@@ -126,6 +142,19 @@
      of comparisons rather than a path lookup every frame. */
   Train.prototype.setPath = function (P) {
     this.path = P;
+    if (L.terminus) {
+      // Every terminus road shares the one throat, on the east — both
+      // streams call it home, but which way "before it" lies flips with
+      // which way each stream actually travels through it (see
+      // buildPath). Nothing here is ever a through-running service (a
+      // terminus books none), so sFast/sFarGate are never consulted —
+      // they just need a harmless value, not a load-bearing one.
+      this.sHome = RY.sAtX(P, L.xEastHome);
+      this.sSlow = RY.sAtX(P, this.dir > 0 ? L.xEastHome + 30 : L.xEastHome - 30);
+      this.sFast = this.sSlow;
+      this.sFarGate = this.sSlow;
+      return;
+    }
     this.sHome = RY.sAtX(P, this.dir > 0 ? L.xWestHome : L.xEastHome);
     this.sSlow = RY.sAtX(P, this.dir > 0 ? L.xWestHome - 30 : L.xEastHome + 30);
     this.sFast = RY.sAtX(P, this.dir > 0 ? L.xEastHome + 30 : L.xWestHome - 30);
@@ -177,9 +206,21 @@
     if (this.targetS !== Infinity && this.s > this.targetS) { this.s = this.targetS; this.v = 0; }
   };
 
-  /* Where the head of this train stands when it is berthed. */
+  /* Where the head of this train stands when it is berthed. At a
+     terminus the platform is asymmetric — one real end, the buffer —
+     so unlike a through station's centred berth, which end of the train
+     sits near it depends on which way this train is actually running:
+     an arrival comes in nose-first toward the buffer (head just short of
+     it); a departure was shunted in tail-first from the yard, so it's
+     the tail sitting near the buffer and the head a train-length out
+     toward the throat it will leave through. */
   Train.prototype.berthHeadX = function () {
     if (!this.stops) return L.stopX;
+    if (L.terminus) {
+      var trk = RY.TRACKS[this.trackId];
+      var bufX = trk ? RY.platSpan(trk).x0 : L.xThroatE - this.len - 60;
+      return this.dir > 0 ? bufX + 16 : bufX + this.len + 16;
+    }
     if (this.dir > 0) {
       return Math.max(L.xThroatW + this.len + 14,
              Math.min(L.xThroatE - 14, L.stopX + this.len / 2));
@@ -210,10 +251,30 @@
   };
 
   /* Re-lay the train onto the road it has been given.  Arc length up to
-     the home signal is identical on every road, so s carries over. */
+     the home signal is identical on every road, so s carries over — with
+     one exception: a service formed in the yard isn't anywhere near the
+     home signal yet. Its first routeTo() instead splices a shunt curve
+     from wherever it's actually parked straight to the platform berth;
+     once that shunt completes (see updateTrain's 'toPlatform' case) it
+     calls routeTo() a second time, by which point yardLinked is set and
+     this falls through to the normal path exactly as any other train's. */
   Train.prototype.routeTo = function (track) {
     this.trackId = track.id;
+    var here = RY.pathAt(this.path, this.s);
+    if (this.yardOrigin && !this.yardLinked) {
+      this.path = RY.shuntCurve(here.x, here.y, this.berthHeadX(), track.y);
+      this.s = 0;
+      this.sSlow = 0; this.sFast = this.path.len;
+      this.targetS = this.path.len;
+      return;
+    }
     this.setPath(RY.buildPath(this.dir, track.y));
+    if (this.yardLinked) {
+      // Coming off the yard shunt onto the standard road path — re-derive
+      // s from where the train actually is, not the shunt curve's own
+      // arc length, which means nothing in this path's coordinates.
+      this.s = RY.sAtX(this.path, here.x);
+    }
     this.stopS = RY.sAtX(this.path, this.berthHeadX());
     this.targetS = this.stops ? this.stopS : Infinity;
   };

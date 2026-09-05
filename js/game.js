@@ -8,6 +8,7 @@
 
   var LEVEL_SECS = 68;          // real seconds per shift
   var LATE_MAX   = 8;           // minutes late before a service is cancelled
+  var LATE_AFTER = 0.75;        // minutes past booked before one reads as late
   var MINS_PER_SEC = 1;         // station clock runs a minute a second
 
   var cv  = document.getElementById('cv');
@@ -35,9 +36,9 @@
     trains: [], trackOwner: freshTrackOwner(),
     throat: { W: { pos: null, neg: null }, E: { pos: null, neg: null } },
     gameT: 360, elapsed: 0, level: 1, score: 0, lives: 3, combo: 0,
-    onTime: 0, events: 0, arrivals: 0,
+    onTime: 0, events: 0, arrivals: 0, dispatched: 0, late: 0,
     spawnIn: 2.5, sel: null, hoverTrack: -1, hoverTrain: null,
-    night: 0, fullHouse: false, people: [], lastBoard: 0
+    night: 0, fullHouse: false, people: [], lastBoard: 0, ttDone: []
   };
   RY.G = G;
 
@@ -66,6 +67,7 @@
     var h = Math.floor(mins / 60) % 24, m = Math.floor(mins % 60);
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
   }
+  function trName(tr) { return tr.svcName || tr.code; }
   function toast(x, y, text, cls) {
     var p = toScreen(x, y), d = document.createElement('div');
     d.className = 'toast ' + (cls || 'info');
@@ -96,6 +98,25 @@
      P4 departure, since P4's departure curve clears every other road's
      turnout before any of them reach theirs. */
   function slotOf(dir) { return dir > 0 ? 'pos' : 'neg'; }
+
+  /* Which throat side a train's move claims. A through station has two —
+     dir>0 enters/exits west, dir<0 east. A terminus has exactly one, on
+     the east, for both directions (see geom.js's buildPath) — an
+     arrival's entry and its later yard-bound shunt, and a departure's
+     yard-to-platform shunt and its later real departure, all pass
+     through the same physical ladder, just at different points in time. */
+  function entSide(tr) { return RY.station.terminus ? 'E' : (tr.dir > 0 ? 'W' : 'E'); }
+
+  /* Drop just the throat lock on `side`, leaving trackOwner untouched —
+     used at a terminus, where entry and exit share one resource across
+     time, to free it between the two claims instead of holding it the
+     whole time a train dwells (which would make the second claim look
+     like a self-conflict — see throatConflict). */
+  function releaseThroatHold(tr, side) {
+    var slot = slotOf(tr.dir);
+    if (G.throat[side][slot] === tr) G.throat[side][slot] = null;
+    tr.holdsThroat[side] = false;
+  }
 
   function crosses(side, tr, trackId, opp) {
     if (!opp) return false;
@@ -132,13 +153,13 @@
   }
   function routeBlocked(tr, track) {
     var own = G.trackOwner[track.id];
-    if (own) return track.short + ' occupied by ' + own.code;
-    var ent = tr.dir > 0 ? 'W' : 'E', side = ent === 'W' ? 'West' : 'East';
+    if (own) return track.short + ' occupied by ' + trName(own);
+    var ent = entSide(tr), side = ent === 'W' ? 'West' : 'East';
     var c = throatConflict(ent, tr, track.id);
     if (c) {
       return c.crossing
-        ? side + ' throat: ' + track.short + ' crosses ' + c.train.code + ' on ' + T[c.train.trackId].short
-        : side + ' throat busy — ' + c.train.code + ' is still using it';
+        ? side + ' throat: ' + track.short + ' crosses ' + trName(c.train) + ' on ' + T[c.train.trackId].short
+        : side + ' throat busy — ' + trName(c.train) + ' is still using it';
     }
     // A through-running service's far-side throat is not reserved up front —
     // see updateTrain()'s 'routed' branch, which holds it at that gate if
@@ -161,21 +182,29 @@
     for (i = 0; i < T.length; i++) if (!compat(tr, T[i])) { comp.push(T[i]); minCap = Math.min(minCap, T[i].maxCars); }
 
     G.trackOwner[idx] = tr; tr.holdsTrack = true;
-    var ent = tr.dir > 0 ? 'W' : 'E';
+    var ent = entSide(tr);
     G.throat[ent][slotOf(tr.dir)] = tr; tr.holdsThroat[ent] = true;
+    // A yard-origin service is physically leaving its stabling road for
+    // good the moment it's called forward — free that road now, or it
+    // stays "occupied" by a train that's no longer anywhere near it,
+    // quietly shrinking the yard's real capacity for good.
+    if (tr.yardOrigin && tr.yardRoad !== null) {
+      RY.YARD[tr.yardRoad].occupant = null;
+      tr.yardRoad = null;
+    }
     tr.routeTo(track);
-    tr.state = 'routed';
+    tr.state = tr.yardOrigin ? 'toPlatform' : 'routed';
     tr.flash = 0.7;
 
     var mm = tr.mid();
-    toast(mm.x, mm.y - 34, 'ROAD SET · ' + track.short +
+    toast(mm.x, mm.y - 34, (tr.yardOrigin ? 'FORMING · ' : 'ROAD SET · ') + track.short +
           (tr.stops ? '' : ' · RUNS THROUGH'), 'good');
     if (tr.stops && track.maxCars === minCap) {
       G.score += 40;
       toast(mm.x, mm.y - 58, 'EFFICIENT +40', 'good');
     }
     if (G.sel === tr) G.sel = null;
-    hint('<b>' + tr.code + '</b> routed into ' + track.name + '.');
+    hint('<b>' + trName(tr) + '</b> ' + (tr.yardOrigin ? 'forming at ' : 'routed into ') + track.name + '.');
     return true;
   }
 
@@ -184,11 +213,11 @@
 
   function punctual(delay, base, tr, label) {
     var pts, tag, good;
-    if (delay <= 0.75)      { pts = base;                                   tag = 'ON TIME';  good = true; }
+    if (delay <= LATE_AFTER) { pts = base;                                   tag = 'ON TIME';  good = true; }
     else if (delay <= 2.5)  { pts = Math.round(base * (1 - delay * 0.15));  tag = '+' + delay.toFixed(1) + ' MIN'; good = true; }
     else                    { pts = Math.max(15, Math.round(base - delay * 22)); tag = 'LATE ' + delay.toFixed(0) + ' MIN'; good = false; }
 
-    if (good) G.combo++; else G.combo = 0;
+    if (good) G.combo++; else { G.combo = 0; countLate(tr); }
     pts = Math.round(pts * mult());
     G.score += pts;
     G.events++; if (good) G.onTime++;
@@ -202,8 +231,15 @@
     var m = tr.mid();
     G.score -= 250; G.combo = 0; G.lives--; G.events++;
     toast(m.x, m.y - 34, 'CANCELLED −250', 'bad');
-    banner('SERVICE CANCELLED', tr.code + ' held ' + LATE_MAX + ' minutes at the home signal');
+    banner('SERVICE CANCELLED', trName(tr) + ' held ' + LATE_MAX + ' minutes at the home signal');
     release(tr);
+    // A departure formed in the yard but never called forward is still
+    // parked there, holding a stabling road that release() above never
+    // touches — leave that held and the yard quietly loses a road for
+    // the rest of the shift.
+    if (tr.yardRoad !== null) { RY.YARD[tr.yardRoad].occupant = null; tr.yardRoad = null; }
+    // Tallied when it actually leaves the list, not here — see update().
+    tr.cancelled = true;
     tr.state = 'gone';
     if (G.lives <= 0) gameOver();
   }
@@ -272,11 +308,69 @@
     G.trains.push(tr);
   }
 
+  /* ================= terminus timetable ================= */
+  var YARD_ARRIVE_LEAD = 9;   // minutes an arrival is visible before it's booked to reach the platform
+
+  function freeYardRoad() {
+    for (var i = 0; i < RY.YARD.length; i++) if (!RY.YARD[i].occupant) return RY.YARD[i];
+    return null;
+  }
+
+  /* A departure's initial position: parked on a yard road with nowhere
+     else to be yet, exactly like a train that arrived and was stabled —
+     except this one is still in 'approach', selectable, and its first
+     routeTo() shunts it to a platform rather than building the usual
+     mainline path (see routeTo() in train.js). */
+  function parkNewArrival(tr, road) {
+    var parkX = L.yardNear + 250;   // matches the depth an arrival's own shunt parks at
+    tr.path = RY.makePath([{ x: parkX - tr.len - 60, y: road.y }, { x: parkX + 60, y: road.y }]);
+    tr.s = tr.len + 60;
+    tr.sSlow = 0; tr.sFast = tr.path.len;
+    tr.v = 0;
+    tr.targetS = tr.s;
+    tr.yardRoad = road.id;
+    tr.yardOrigin = true;
+    road.occupant = tr;
+  }
+
+  /* Runs instead of spawn()/weightedType() at a terminus: services appear
+     on their own booked times rather than a random weighted mix. */
+  function scheduleTimetable() {
+    var tt = RY.station.timetable, i, e, tr, road;
+    for (i = 0; i < tt.length; i++) {
+      if (G.ttDone[i]) continue;
+      e = tt[i];
+      if (e.dir > 0) {
+        if (G.gameT < e.t - YARD_ARRIVE_LEAD) continue;
+        tr = new RY.Train(e.type, 1, G.gameT);
+        tr.sched = e.t;
+        tr.schedDep = e.t + tr.cfg.dwell;
+        tr.svcName = e.name;
+        G.trains.push(tr);
+        G.ttDone[i] = true;
+      } else {
+        if (G.gameT < e.t - e.prep) continue;
+        road = freeYardRoad();
+        if (!road) continue;             // yard's full — try again once one clears
+        tr = new RY.Train(e.type, -1, G.gameT);
+        parkNewArrival(tr, road);
+        tr.sched = e.t - e.prep + Math.min(e.prep - 4, 10);   // how long they'll wait before it's fair to call this late
+        tr.schedDep = e.t;
+        tr.svcName = e.name;
+        G.trains.push(tr);
+        G.ttDone[i] = true;
+      }
+    }
+  }
+
   /* ================= per-frame simulation ================= */
   function followTargets() {
     [1, -1].forEach(function (dir) {
+      // A yard-origin service isn't on the shared approach line at all —
+      // it's sitting in the yard on its own path, so it has no place in
+      // this queue and no business being capped behind whoever's in it.
       var list = G.trains.filter(function (t) {
-        return t.dir === dir && (t.state === 'approach' || t.state === 'routed');
+        return t.dir === dir && !t.yardOrigin && (t.state === 'approach' || t.state === 'routed');
       }).sort(function (a, b) { return b.s - a.s; });
       for (var i = 0; i < list.length; i++) {
         var t = list[i];
@@ -288,7 +382,13 @@
     });
   }
 
+  /* At a terminus, entry and exit share the one throat side, so these
+     generic thresholds (each keyed to a distinct, opposite-end signal
+     that doesn't exist there) don't apply — every lock at a terminus is
+     taken and dropped explicitly at the relevant state transition in
+     updateTrain() instead. */
   function updateResources(tr) {
+    if (RY.station.terminus) return;
     var ent = tr.dir > 0 ? 'W' : 'E', ex = ent === 'W' ? 'E' : 'W', tx = tr.tailX();
     var slot = slotOf(tr.dir);
 
@@ -306,7 +406,31 @@
     }
   }
 
+  /* Overdue at the home signal, waiting on a road — what the register
+     shows as DELAYED, and what turns into a strike if left long enough. */
+  function overdue(tr) {
+    return tr.state === 'approach' && G.gameT - tr.sched > LATE_AFTER;
+  }
+
+  /* The top bar's count is a tally, not a gauge: each service is counted
+     once, the first time it is either flagged DELAYED at the signal or
+     scored late on the day (see punctual). Counting only what is late right
+     now would read zero for a dispatcher who keeps the signal clear but
+     still runs services late through the platforms, and would empty itself
+     the moment a late train left — just as you looked for the number.
+
+     Both triggers are things the game already tells you about, so the count
+     can never claim more lateness than the register and the toasts do. In
+     particular a service still inside its booked dwell is not late for
+     having a departure time in the future. */
+  function countLate(tr) {
+    if (tr.lateFlag) return;
+    tr.lateFlag = true;
+    G.late++;
+  }
+
   function updateTrain(tr, dt) {
+    if (overdue(tr)) countLate(tr);
     if (tr.flash > 0) tr.flash -= dt;
 
     switch (tr.state) {
@@ -319,8 +443,21 @@
           if (tr.s >= tr.stopS - 0.4 && tr.v < 0.6) {
             tr.state = 'dwell';
             tr.dwellUntil = G.gameT + tr.cfg.dwell;
-            G.arrivals++;
-            punctual(G.gameT - tr.sched, 120, tr, 'ARRIVED');
+            // A yard-origin service reaching its platform via a shunt
+            // isn't arriving off the network — it already scored (or
+            // didn't) when it was first sent for; this dwell is the
+            // boarding call, not a fresh arrival.
+            if (!tr.yardOrigin) {
+              G.arrivals++;
+              punctual(G.gameT - tr.sched, 120, tr, 'ARRIVED');
+            }
+            // At a terminus this train is now well clear of the one
+            // throat it shares with everything else — drop that claim
+            // now rather than holding it for the whole dwell; it (or,
+            // for a yard-formed departure, the exit-side claim) gets
+            // taken fresh when this train actually needs the throat
+            // again (see 'awaitYard'/'awaitDepart' below).
+            if (RY.station.terminus) releaseThroatHold(tr, 'E');
           }
         } else {
           var farSide = tr.dir > 0 ? 'E' : 'W';
@@ -355,11 +492,17 @@
         break;
 
       case 'dwell':
-        if (G.gameT >= tr.dwellUntil) tr.state = 'awaitDepart';
+        if (G.gameT >= tr.dwellUntil) {
+          // At a terminus, an arrival's passengers are off and it's the
+          // yard it wants next, not the open road — a departure formed in
+          // the yard, though, is a normal working from here: it boards,
+          // then leaves west exactly like any other station's departure.
+          tr.state = (RY.station.terminus && tr.dir > 0) ? 'awaitYard' : 'awaitDepart';
+        }
         break;
 
       case 'awaitDepart':
-        var ex = tr.dir > 0 ? 'E' : 'W';
+        var ex = RY.station.terminus ? 'E' : (tr.dir > 0 ? 'E' : 'W');
         if (!throatConflict(ex, tr, tr.trackId)) {
           G.throat[ex][slotOf(tr.dir)] = tr; tr.holdsThroat[ex] = true;
           tr.state = 'depart';
@@ -371,6 +514,60 @@
 
       case 'depart':
         if (tr.s >= tr.path.len - 1) { release(tr); tr.state = 'gone'; }
+        break;
+
+      /* ---- terminus only, from here down ---- */
+
+      // An arrival that's done unloading isn't going anywhere on the
+      // mainline any more — the platform road simply ends at the buffer
+      // (see buildPath) — so what it needs next is a fresh shunt curve
+      // straight to a stabling road, built from wherever it's actually
+      // standing right now (it's been at rest since 'dwell' began).
+      case 'awaitYard':
+        var freeRoad = null, fi;
+        for (fi = 0; fi < RY.YARD.length; fi++) if (!RY.YARD[fi].occupant) { freeRoad = RY.YARD[fi]; break; }
+        if (freeRoad && !throatConflict('E', tr, tr.trackId)) {
+          G.throat.E[slotOf(tr.dir)] = tr; tr.holdsThroat.E = true;
+          freeRoad.occupant = tr; tr.yardRoad = freeRoad.id;
+          var from = tr.pos(), parkX = L.yardNear + 250;
+          tr.path = RY.shuntCurve(from.x, from.y, parkX, freeRoad.y);
+          tr.s = 0; tr.sSlow = 0; tr.sFast = tr.path.len;
+          tr.targetS = tr.path.len;
+          tr.state = 'toYard';
+          // The platform is vacated the moment this shunt is committed to
+          // — freeRoad, just claimed above, is the only road this train
+          // owns from here on.
+          if (G.trackOwner[tr.trackId] === tr) G.trackOwner[tr.trackId] = null;
+          tr.holdsTrack = false;
+        }
+        break;
+
+      case 'toYard':
+        if (tr.v < 0.6 && tr.s >= tr.targetS - 0.5) {
+          release(tr);   // clear of the throat claim taken in awaitYard
+          tr.state = 'parked';
+          tr.parkedUntil = G.gameT + 26;
+        }
+        break;
+
+      case 'parked':
+        if (G.gameT >= tr.parkedUntil) {
+          if (tr.yardRoad !== null) RY.YARD[tr.yardRoad].occupant = null;
+          tr.state = 'gone';
+        }
+        break;
+
+      case 'toPlatform':
+        if (tr.v < 0.6 && tr.s >= tr.targetS - 0.5) {
+          tr.yardLinked = true;
+          tr.routeTo(T[tr.trackId]);
+          tr.state = 'routed';
+          // The shunt from the yard is done — this train is now standing
+          // on its platform, clear of the throat, well before it will
+          // need that same lock again to actually leave (see
+          // 'awaitDepart'). Hold it through the shunt and no longer.
+          releaseThroatHold(tr, 'E');
+        }
         break;
     }
     updateResources(tr);
@@ -404,6 +601,23 @@
     }
   }
 
+  /* Every service leaves the list exactly once, and by exactly one of two
+     routes: it ran its course, or it was cancelled under it. Tallying here
+     rather than at each of the several places that set 'gone' means neither
+     counter can drift or double-count.
+
+     gameOver() flushes this before drawing its summary: the cancellation
+     that ends a shift happens mid-way through the train loop below, so
+     without a flush the final report would be built from counts that are
+     still one tick behind the shift it is reporting on. */
+  function sweepFinished() {
+    G.trains = G.trains.filter(function (t) {
+      if (t.state !== 'gone') return true;
+      if (!t.cancelled) G.dispatched++;
+      return false;
+    });
+  }
+
   function update(dt) {
     G.elapsed += dt;
     G.gameT += dt * MINS_PER_SEC;
@@ -415,11 +629,15 @@
     }
     G.night = Math.min(0.58, Math.max(0, (G.level - 1) * 0.085));
 
-    G.spawnIn -= dt;
-    if (G.spawnIn <= 0) {
-      spawn();
-      var headway = Math.max(5.0, 16 - (G.level - 1) * 1.05);
-      G.spawnIn = headway * (0.75 + Math.random() * 0.5);
+    if (RY.station.terminus) {
+      scheduleTimetable();
+    } else {
+      G.spawnIn -= dt;
+      if (G.spawnIn <= 0) {
+        spawn();
+        var headway = Math.max(5.0, 16 - (G.level - 1) * 1.05);
+        G.spawnIn = headway * (0.75 + Math.random() * 0.5);
+      }
     }
 
     followTargets();
@@ -430,7 +648,7 @@
     for (i = 0; i < G.trains.length; i++) {
       if (G.trains[i].state !== 'gone') updateTrain(G.trains[i], dt);
     }
-    G.trains = G.trains.filter(function (t) { return t.state !== 'gone'; });
+    sweepFinished();
     if (G.sel && G.sel.state !== 'approach') G.sel = null;
 
     checkFullHouse();
@@ -447,7 +665,8 @@
       why = canAssign(G.sel, t);
       col = why ? 'rgba(224,72,50,' : 'rgba(56,190,90,';
       ctx.fillStyle = col + (G.hoverTrack === i ? 0.28 : 0.13) + ')';
-      RY.rr(ctx, L.xThroatW, t.y - 23, L.xThroatE - L.xThroatW, 46, 6);
+      var hlX0 = L.terminus ? RY.platSpan(t).x0 : L.xThroatW;
+      RY.rr(ctx, hlX0, t.y - 23, L.xThroatE - hlX0, 46, 6);
       ctx.fill();
       ctx.strokeStyle = col + (G.hoverTrack === i ? 0.85 : 0.4) + ')';
       ctx.lineWidth = 1.6;
@@ -515,11 +734,34 @@
   }
 
   function drawSignals() {
+    var i;
+    if (L.terminus) {
+      // Both streams share the one throat here, so both signal heads
+      // stand at the same x (xEastHome) — one for arrivals off the
+      // network (G.throat.E.pos), one for departures leaving the same
+      // way (G.throat.E.neg) — offset in y exactly like a through
+      // station's two opposite home signals are.
+      var arr = G.throat.E.pos, dep = G.throat.E.neg;
+      var arrGo = arr && arr.state === 'routed' && !pastSignal(arr, L.xEastHome);
+      var depGo = dep && dep.state === 'depart' && !pastSignal(dep, L.xEastHome);
+      drawSignal(L.xEastHome, L.mainB + 42, arrGo ? 2 : 0, true);
+      drawSignal(L.xEastHome, L.mainA - 42, depGo ? 2 : 0, true);
+      for (i = 0; i < T.length; i++) {
+        var ot = G.trackOwner[i];
+        // Only a real departure gets a starter signal here — an arrival's
+        // yard-bound shunt releases its platform the moment it commits
+        // (see 'awaitYard' in updateTrain), well before it's this signal's
+        // business, exactly like the yard shunt is nobody else's.
+        var goT = ot && ot.dir < 0 && ot.state === 'depart' && !pastSignal(ot, L.xThroatE - 30);
+        drawSignal(L.xThroatE - 30, T[i].y - 34, goT ? 2 : 0, true);
+      }
+      return;
+    }
     // G.throat.W.pos only ever holds a dir>0 (west-entering) train, and
     // G.throat.E.neg only ever a dir<0 (east-entering) one — see slotOf —
     // so the home signal is exactly this train's clearance, not some other
     // road's, however many services are queued behind it at the signal.
-    var wArr = G.throat.W.pos, eArr = G.throat.E.neg, i;
+    var wArr = G.throat.W.pos, eArr = G.throat.E.neg;
     var wGo = wArr && wArr.state === 'routed' && !pastSignal(wArr, L.xWestHome);
     var eGo = eArr && eArr.state === 'routed' && !pastSignal(eArr, L.xEastHome);
     drawSignal(L.xWestHome, L.mainB + 42, wGo ? 2 : 0, true);
@@ -562,12 +804,17 @@
               y: (hd.y + tl.y) / 2 };
     var above = tr.dir > 0 ? -1 : 1;
     var y = m.y + above * 38;
-    var txt = tr.code, sub = '', col = '#f0b429', mid = null, midCol = '#9aa4b0';
+    var txt = tr.svcName || tr.code, sub = '', col = '#f0b429', mid = null, midCol = '#9aa4b0';
 
     if (tr.state === 'approach') {
       var d = G.gameT - tr.sched;
-      sub = d > 0.75 ? '+' + d.toFixed(0) + ' min late' : 'due ' + fmtTime(tr.sched);
-      col = d > 3 ? '#ff7a5c' : d > 0.75 ? '#f0b429' : '#7ee0a0';
+      if (tr.yardOrigin) {
+        sub = d > LATE_AFTER ? 'call it forward \u2014 +' + d.toFixed(0) + ' min' : 'ready \u00b7 dep ' + fmtTime(tr.schedDep);
+        col = d > 3 ? '#ff7a5c' : '#7ee0a0';
+      } else {
+        sub = d > LATE_AFTER ? '+' + d.toFixed(0) + ' min late' : 'due ' + fmtTime(tr.sched);
+        col = d > 3 ? '#ff7a5c' : d > LATE_AFTER ? '#f0b429' : '#7ee0a0';
+      }
       if (tr.stops) {
         mid = 'CALLS \u00b7 ' + eligible(tr).map(function (k) { return k.short; }).join(' ');
         midCol = '#79c0ff';
@@ -575,10 +822,16 @@
         mid = 'RUNS THROUGH \u00b7 ' + eligible(tr).map(function (k) { return k.short; }).join(' ');
         midCol = '#f0b429';
       }
+    } else if (tr.state === 'toPlatform') {
+      sub = 'forming \u00b7 ' + T[tr.trackId].short; col = '#7ee0a0';
     } else if (tr.state === 'dwell') {
       sub = 'dep ' + fmtTime(tr.schedDep); col = '#79c0ff';
     } else if (tr.state === 'awaitDepart') {
       sub = 'held \u2014 throat busy'; col = '#ff7a5c';
+    } else if (tr.state === 'awaitYard') {
+      sub = 'held \u2014 yard busy'; col = '#ff7a5c';
+    } else if (tr.state === 'toYard' || tr.state === 'parked') {
+      sub = 'stabled'; col = '#9aa4b0';
     } else if (tr.state === 'routed') {
       var atFarGate = !tr.stops && !tr.gateCleared && tr.targetS !== Infinity;
       if (atFarGate) {
@@ -690,22 +943,28 @@
       ctx.fillText('press space, or the button above, to resume', RY.W / 2, RY.H / 2 + 26);
     }
 
-    // direction reminders at the line ends
+    // direction reminders at the line ends — a terminus has nothing at
+    // the west end at all, and everything (network and yard alike) on
+    // the one east side.
     ctx.save();
     ctx.font = '700 11px ui-monospace, monospace';
     ctx.fillStyle = 'rgba(190,202,216,.55)';
-    ctx.textAlign = 'left';
-    ctx.fillText('▶  FROM THE WEST', 12, L.mainB + 66);
+    if (!L.terminus) {
+      ctx.textAlign = 'left';
+      ctx.fillText('▶  FROM THE WEST', 12, L.mainB + 66);
+    }
     ctx.textAlign = 'right';
-    ctx.fillText('FROM THE EAST  ◀', RY.W - 12, L.mainA - 54);
+    ctx.fillText((L.terminus ? 'NETWORK & YARD' : 'FROM THE EAST') + '  ◀', RY.W - 12, L.mainA - 54);
     ctx.restore();
   }
 
   /* ================= HUD ================= */
   function statusOf(tr) {
     if (tr.state === 'approach') {
-      return (G.gameT - tr.sched > 0.75) ? ['DELAYED', 'st-late'] : ['WAITING', 'st-wait'];
+      if (tr.yardOrigin) return overdue(tr) ? ['DELAYED', 'st-late'] : ['IN YARD', 'st-wait'];
+      return overdue(tr) ? ['DELAYED', 'st-late'] : ['WAITING', 'st-wait'];
     }
+    if (tr.state === 'toPlatform') return ['FORMING', 'st-run'];
     if (tr.state === 'routed') {
       if (!tr.stops && !tr.gateCleared && tr.targetS !== Infinity) {
         return ['HELD', 'st-late'];
@@ -713,31 +972,45 @@
       return ['RUNNING', 'st-run'];
     }
     if (tr.state === 'dwell') return ['AT PLATFORM', 'st-dwell'];
-    if (tr.state === 'awaitDepart') return ['HELD', 'st-late'];
+    if (tr.state === 'awaitDepart' || tr.state === 'awaitYard') return ['HELD', 'st-late'];
     return ['DEPARTING', 'st-run'];
   }
 
   function renderBoard() {
-    var list = G.trains.slice().sort(function (a, b) { return a.sched - b.sched; });
+    // Once a service is quietly shunting into or sitting in the yard, it's
+    // no longer anything the dispatcher can act on — leave it off the
+    // register rather than clutter it with entries nothing can be done
+    // with; it's still there, parked, on the canvas.
+    var list = G.trains.filter(function (t) { return t.state !== 'toYard' && t.state !== 'parked'; })
+                        .sort(function (a, b) { return a.sched - b.sched; });
     if (!list.length) {
       elBoard.innerHTML = '<div class="empty">No services on the panel.<br>Stand by.</div>';
       return;
     }
-    var html = '', i, tr, st;
+    /* Two lines per entry: the first identifies the service — which way it
+       is running, what it is called, where it runs between, and the road it
+       is on — and the second carries its formation and current status. The
+       roads it *could* take aren't listed here; selecting it lights the
+       assignable ones up on the road buttons below, and its canvas label
+       spells them out.
+
+       A timetabled terminus service shows no origin/destination: its name
+       already is its route ("Chennai–Howrah Mail"), and the random pair
+       every train is otherwise given would be noise beside it. Those rows
+       let the name take the slack instead. */
+    var html = '', i, tr, st, route;
     for (i = 0; i < list.length; i++) {
       tr = list[i]; st = statusOf(tr);
-      var roads = eligible(tr).map(function (k) { return k.short; }).join(' ');
+      route = tr.svcName ? '' : tr.origin + ' → ' + tr.dest;
       html += '<div class="row' + (G.sel === tr ? ' sel' : '') + '" data-id="' + tr.id +
               '" style="border-left-color:' + tr.cfg.body + '">' +
-        '<div class="r1"><span class="code">' + tr.code + '</span>' +
-        '<span class="sched">' + fmtTime(tr.sched) + '</span></div>' +
-        '<div class="r2"><span class="kind">' + tr.cfg.label + ' · ' + tr.cars + ' cars</span>' +
-        '<span class="stat2 ' + st[1] + '">' + st[0] + '</span></div>' +
-        '<div class="r3"><span>' + (tr.dir > 0 ? '▶ ' : '◀ ') + tr.origin + ' → ' + tr.dest + '</span>' +
+        '<div class="r1"><span class="dir">' + (tr.dir > 0 ? '▶' : '◀') + '</span>' +
+        '<span class="code' + (route ? '' : ' grow') + '">' + (tr.svcName || tr.code) + '</span>' +
+        (route ? '<span class="route">' + route + '</span>' : '') +
         '<span class="road">' + (tr.trackId !== null ? T[tr.trackId].short : '—') + '</span></div>' +
-        '<div class="r4"><span class="calls ' + (tr.stops ? 'c-stop' : 'c-pass') + '">' +
-        (tr.stops ? 'CALLS' : 'RUNS THROUGH') + '</span>' +
-        '<span class="roads">' + roads + '</span></div>' +
+        '<div class="r2"><span class="kind">' + tr.cfg.label + ' · ' + tr.cars + ' cars · ' +
+        fmtTime(tr.svcName ? (tr.dir > 0 ? tr.sched : tr.schedDep) : tr.sched) + '</span>' +
+        '<span class="stat2 ' + st[1] + '">' + st[0] + '</span></div>' +
         '</div>';
     }
     elBoard.innerHTML = html;
@@ -774,9 +1047,17 @@
     document.getElementById('s-level').textContent = G.level;
     document.getElementById('s-punct').textContent =
       G.events ? Math.round(G.onTime / G.events * 100) + '%' : '—';
-    document.getElementById('s-combo').textContent = '×' + mult().toFixed(1);
+    // Two decimals, and the streak itself alongside: the bonus steps by 0.08
+    // and caps at twelve, so a rounded one-decimal multiplier on its own sat
+    // unchanged through 2->3, 7->8 and every increment past the cap — which
+    // reads as a combo that failed to count, especially when two services
+    // score moments apart and you are watching this very number.
+    document.getElementById('s-combo').textContent =
+      '×' + mult().toFixed(2) + ' · ' + G.combo;
     document.getElementById('s-lives').textContent =
       '●●●'.slice(0, Math.max(0, G.lives)) + '○○○'.slice(0, Math.max(0, 3 - G.lives));
+    document.getElementById('s-disp').textContent = G.dispatched;
+    document.getElementById('s-late').textContent = G.late;
   }
 
   /* ================= input ================= */
@@ -793,8 +1074,16 @@
     return best;
   }
   function hitTrack(wx, wy) {
+    var i;
+    if (L.terminus) {
+      if (wx > L.xThroatE) return -1;
+      for (i = 0; i < T.length; i++) {
+        if (Math.abs(wy - T[i].y) < 30 && wx >= RY.platSpan(T[i]).x0) return i;
+      }
+      return -1;
+    }
     if (wx < L.xThroatW || wx > L.xThroatE) return -1;
-    for (var i = 0; i < T.length; i++) if (Math.abs(wy - T[i].y) < 30) return i;
+    for (i = 0; i < T.length; i++) if (Math.abs(wy - T[i].y) < 30) return i;
     return -1;
   }
 
@@ -811,7 +1100,7 @@
     var tr = hitTrain(w.x, w.y), ti = hitTrack(w.x, w.y);
     if (tr && tr.state === 'approach') { select(tr); return; }
     if (G.sel && ti >= 0) { assign(G.sel, ti); renderBoard(); renderKeys(); return; }
-    if (tr) { select(null); hint('<b>' + tr.code + '</b> is already on the move.'); return; }
+    if (tr) { select(null); hint('<b>' + trName(tr) + '</b> is already on the move.'); return; }
     select(null);
   });
 
@@ -820,7 +1109,7 @@
     if (tr) {
       var free = [], i;
       for (i = 0; i < T.length; i++) if (!canAssign(tr, T[i])) free.push(T[i].short);
-      hint('<b>' + tr.code + '</b> · ' + tr.cfg.label + ' · ' + tr.cars + ' cars<br>' +
+      hint('<b>' + trName(tr) + '</b> · ' + tr.cfg.label + ' · ' + tr.cars + ' cars<br>' +
            (tr.stops
               ? 'Calls here — needs a platform of ' + tr.cars + ' or more.'
               : 'Runs through — no booked stop.') + '<br>' +
@@ -970,11 +1259,13 @@
   function gameOver() {
     G.state = 'over';
     RY.audio.suspend();   // cut instantly rather than waiting for the next frame
+    sweepFinished();      // count the service whose cancellation just ended this
     elOverlay.innerHTML =
       '<div class="card"><h1>SHIFT <em>ENDED</em></h1>' +
       '<p class="tag">Three services cancelled. Control has been relieved.</p>' +
       '<div class="final">' +
       '<div><label>Final score</label><span>' + Math.max(0, Math.round(G.score)).toLocaleString() + '</span></div>' +
+      '<div><label>Trains dispatched</label><span>' + G.dispatched + '</span></div>' +
       '<div><label>Shifts worked</label><span>' + G.level + '</span></div>' +
       '<div><label>Trains handled</label><span>' + G.arrivals + '</span></div>' +
       '<div><label>Punctuality</label><span>' + (G.events ? Math.round(G.onTime / G.events * 100) : 0) + '%</span></div>' +
@@ -1006,7 +1297,10 @@
   function renderStationPicker() {
     var wrap = document.getElementById('stationPicker');
     if (!wrap) return;
-    wrap.innerHTML = RY.STATIONS.map(function (s) {
+    // A station marked `hidden` is fully built and playable — it just
+    // isn't offered here (see its entry in geom.js for why). Everything
+    // else about it still works, so unhiding is a one-word change.
+    wrap.innerHTML = RY.STATIONS.filter(function (s) { return !s.hidden; }).map(function (s) {
       var plats = s.tracks.filter(function (t) { return t.platform; }).length;
       var thru = s.tracks.length - plats;
       return '<button type="button" class="stn' + (s.id === selectedStationId ? ' sel' : '') +
@@ -1038,7 +1332,9 @@
     G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } };
     G.gameT = 360; G.elapsed = 0; G.level = 1; G.score = 0; G.lives = 3;
     G.combo = 0; G.onTime = 0; G.events = 0; G.arrivals = 0;
+    G.dispatched = 0; G.late = 0;
     G.spawnIn = 2.0; G.sel = null; G.night = 0; G.fullHouse = false;
+    G.ttDone = def.terminus ? def.timetable.map(function () { return false; }) : [];
     makePeople();
     document.getElementById('btn-pause').textContent = '\u23f8';
     elOverlay.classList.remove('show');
