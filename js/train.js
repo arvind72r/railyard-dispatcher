@@ -578,8 +578,11 @@
 
     if (vh.first) cabEnd(ctx, BL, HW, cfg, true, true, false, RY.LAMPS.emu);
     if (vh.last)  cabEnd(ctx, BL, HW, cfg, false, true, false, RY.LAMPS.emu);    // the train's tail
-    if (!vh.first) gangway(ctx, -BL / 2 - 0.5, -1);
-    if (!vh.last)  gangway(ctx,  BL / 2 + 0.5,  1);
+    // +x is the leading end: a gangway toward the car ahead unless this is
+    // the front car, and toward the car behind unless it's the last —
+    // never on a cab end
+    if (!vh.first) gangway(ctx,  BL / 2 + 0.5,  1);
+    if (!vh.last)  gangway(ctx, -BL / 2 - 0.5, -1);
   }
 
   function drawCoach(ctx, tr, vh) {
@@ -613,13 +616,17 @@
     roofVent(ctx,  BL * 0.30);
     specular(ctx, BL, RH);
 
+    // +x is the leading end. The first coach couples to the locomotive by
+    // its buffers; every other one has a gangway through to the coach ahead.
+    // At the back, a gangway to the next coach, or on the last one the tail.
+    if (vh.idx > 1) gangway(ctx, BL / 2 + 0.5, 1);
+    else buffers(ctx, BL / 2 + 0.5, 1);
     if (vh.last) {
       cabEnd(ctx, BL, HW, cfg, false, true, false, RY.LAMPS.coach);   // the train's tail
-      buffers(ctx, BL / 2 + 0.5, 1);
+      buffers(ctx, -BL / 2 - 0.5, -1);
     } else {
-      gangway(ctx, BL / 2 + 0.5, 1);
+      gangway(ctx, -BL / 2 - 0.5, -1);
     }
-    gangway(ctx, -BL / 2 - 0.5, -1);
   }
 
   /* Electric locomotive: heavier than a coach, warning panels at both
