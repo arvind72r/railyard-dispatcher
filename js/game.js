@@ -20,7 +20,7 @@
   var elHint   = document.getElementById('hint');
   var elOverlay = document.getElementById('overlay');
 
-  var view = { scale: 1, ox: 0, oy: 0 };
+  var view = RY.view = { scale: 1, ox: 0, oy: 0 };   // shared: the cab view fits itself around the map
   var introHTML = elOverlay.innerHTML;
   var selectedStationId = RY.station.id;   // whatever geom.js booted with
 
@@ -733,8 +733,13 @@
     return tr.dir > 0 ? tr.headX() >= clearBy : tr.headX() <= clearBy;
   }
 
-  function drawSignals() {
-    var i;
+  /* Every signal on the ground: where it stands, its aspect, and dirX —
+     which way the trains it governs are travelling (+1 east, -1 west), so
+     the cab view can tell a signal it's approaching from one it's seeing
+     the back of. The map draws exactly these; the cab reads them. */
+  function signalStates() {
+    var out = [], i;
+    function sig(x, y, go, dirX) { out.push({ x: x, y: y, aspect: go ? 2 : 0, dirX: dirX }); }
     if (L.terminus) {
       // Both streams share the one throat here, so both signal heads
       // stand at the same x (xEastHome) — one for arrivals off the
@@ -742,30 +747,26 @@
       // way (G.throat.E.neg) — offset in y exactly like a through
       // station's two opposite home signals are.
       var arr = G.throat.E.pos, dep = G.throat.E.neg;
-      var arrGo = arr && arr.state === 'routed' && !pastSignal(arr, L.xEastHome);
-      var depGo = dep && dep.state === 'depart' && !pastSignal(dep, L.xEastHome);
-      drawSignal(L.xEastHome, L.mainB + 42, arrGo ? 2 : 0, true);
-      drawSignal(L.xEastHome, L.mainA - 42, depGo ? 2 : 0, true);
+      sig(L.xEastHome, L.mainB + 42, arr && arr.state === 'routed' && !pastSignal(arr, L.xEastHome), -1);
+      sig(L.xEastHome, L.mainA - 42, dep && dep.state === 'depart' && !pastSignal(dep, L.xEastHome), 1);
       for (i = 0; i < T.length; i++) {
         var ot = G.trackOwner[i];
         // Only a real departure gets a starter signal here — an arrival's
         // yard-bound shunt releases its platform the moment it commits
         // (see 'awaitYard' in updateTrain), well before it's this signal's
         // business, exactly like the yard shunt is nobody else's.
-        var goT = ot && ot.dir < 0 && ot.state === 'depart' && !pastSignal(ot, L.xThroatE - 30);
-        drawSignal(L.xThroatE - 30, T[i].y - 34, goT ? 2 : 0, true);
+        sig(L.xThroatE - 30, T[i].y - 34,
+            ot && ot.dir < 0 && ot.state === 'depart' && !pastSignal(ot, L.xThroatE - 30), 1);
       }
-      return;
+      return out;
     }
     // G.throat.W.pos only ever holds a dir>0 (west-entering) train, and
     // G.throat.E.neg only ever a dir<0 (east-entering) one — see slotOf —
     // so the home signal is exactly this train's clearance, not some other
     // road's, however many services are queued behind it at the signal.
     var wArr = G.throat.W.pos, eArr = G.throat.E.neg;
-    var wGo = wArr && wArr.state === 'routed' && !pastSignal(wArr, L.xWestHome);
-    var eGo = eArr && eArr.state === 'routed' && !pastSignal(eArr, L.xEastHome);
-    drawSignal(L.xWestHome, L.mainB + 42, wGo ? 2 : 0, true);
-    drawSignal(L.xEastHome, L.mainA - 42, eGo ? 2 : 0, true);
+    sig(L.xWestHome, L.mainB + 42, wArr && wArr.state === 'routed' && !pastSignal(wArr, L.xWestHome), 1);
+    sig(L.xEastHome, L.mainA - 42, eArr && eArr.state === 'routed' && !pastSignal(eArr, L.xEastHome), -1);
     for (i = 0; i < T.length; i++) {
       var o = G.trackOwner[i];
       // A stopping train clears this signal by actually departing; a
@@ -774,11 +775,14 @@
       // by itself clearance, or the signal would read green the moment
       // it's assigned a road, long before it's allowed to cross.
       var ready = o && (o.stops ? o.state === 'depart' : o.gateCleared);
-      var eastGo = ready && o.dir > 0 && !pastSignal(o, L.xThroatE - 30);
-      var westGo = ready && o.dir < 0 && !pastSignal(o, L.xThroatW + 30);
-      drawSignal(L.xThroatE - 30, T[i].y + 34, eastGo ? 2 : 0, true);
-      drawSignal(L.xThroatW + 30, T[i].y - 34, westGo ? 2 : 0, true);
+      sig(L.xThroatE - 30, T[i].y + 34, ready && o.dir > 0 && !pastSignal(o, L.xThroatE - 30), 1);
+      sig(L.xThroatW + 30, T[i].y - 34, ready && o.dir < 0 && !pastSignal(o, L.xThroatW + 30), -1);
     }
+    return out;
+  }
+
+  function drawSignals() {
+    signalStates().forEach(function (s) { drawSignal(s.x, s.y, s.aspect, true); });
   }
 
   function drawPeople() {
@@ -929,6 +933,7 @@
     for (i = 0; i < G.trains.length; i++) RY.drawTrainLights(ctx, G.trains[i], G.night);
     ctx.restore();
 
+    RY.cab.drawMarker(ctx);
     for (i = 0; i < G.trains.length; i++) drawLabel(G.trains[i]);
 
     if (G.state === 'paused') {
@@ -1098,9 +1103,13 @@
     if (G.state !== 'running') return;
     var r = cv.getBoundingClientRect(), w = toWorld(e.clientX - r.left, e.clientY - r.top);
     var tr = hitTrain(w.x, w.y), ti = hitTrack(w.x, w.y);
-    if (tr && tr.state === 'approach') { select(tr); return; }
+    if (tr && tr.state === 'approach') { select(tr); RY.cab.follow(tr); return; }
     if (G.sel && ti >= 0) { assign(G.sel, ti); renderBoard(); renderKeys(); return; }
-    if (tr) { select(null); hint('<b>' + trName(tr) + '</b> is already on the move.'); return; }
+    if (tr) {
+      select(null); RY.cab.follow(tr);
+      hint('<b>' + trName(tr) + '</b> already has its road \u2014 riding in its cab.');
+      return;
+    }
     select(null);
   });
 
@@ -1128,6 +1137,7 @@
     for (i = 0; i < G.trains.length; i++) {
       if (G.trains[i].id === id) {
         select(G.trains[i].state === 'approach' ? G.trains[i] : null);
+        RY.cab.follow(G.trains[i]);
         return;
       }
     }
@@ -1167,6 +1177,7 @@
       return;
     }
     if (e.key === 'm' || e.key === 'M') { toggleMute(); return; }
+    if (e.key === 'c' || e.key === 'C') { RY.cab.toggle(); return; }
     if (e.key === 'Escape') { select(null); return; }
     var n = parseInt(e.key, 10);
     if (n >= 1 && n <= T.length && G.sel && G.state === 'running') {
@@ -1324,6 +1335,7 @@
     RY.audio.resume();
     var def = RY.applyStation(selectedStationId);
     RY.bakeScene();
+    RY.cab.reset();
     renderAkeys();
     document.querySelector('.bname').textContent = def.name.toUpperCase();
     document.title = 'Railyard Dispatcher \u2014 ' + def.name;
@@ -1363,6 +1375,7 @@
       RY.audio.silence();
     }
     draw();
+    RY.cab.draw(G, signalStates());
     requestAnimationFrame(frame);
   }
 

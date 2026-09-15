@@ -470,9 +470,12 @@
     ctx.restore();
   };
 
-  /* Overhead line equipment — masts either side, contact wire down the middle. */
+  /* Overhead line equipment — masts either side, contact wire down the middle.
+     Every path drawn here is kept in RY.olePaths too, so the cab view can put
+     its masts and wire exactly where the map does. */
   function drawOLE(ctx, P) {
     var s, p, o;
+    RY.olePaths.push(P);
     ctx.save();
     poly(ctx, P.pts);
     ctx.strokeStyle = 'rgba(190,200,212,.13)';
@@ -592,6 +595,8 @@
 
     var rnd = RY.rng(20240824);
     var segs = RY.buildTrackwork();
+    RY.olePaths = [];
+    RY.sceneBake = (RY.sceneBake || 0) + 1;   // lets anything built off the scene know it's stale
     var i;
 
     drawGround(ctx, rnd);

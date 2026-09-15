@@ -271,6 +271,53 @@ arrive with speed still on. Headings come from a centred difference along the
 path rather than the chord a vehicle happens to sit on, so stock turns
 continuously through the throat instead of snapping between chord angles.
 
+## Cab view
+
+Click any train — on the map, or its row in the Train Register — and a cab
+view opens in the top-left corner of the map: the line ahead from the
+driver's seat of that train, live, for as long as it's in the scene. A cyan
+ring on the map marks whose cab you're in.
+
+It isn't a separate model. Every rail, sleeper, platform, canopy, signal,
+mast and train in it is the same plan-view data the map is drawn from, stood
+up in perspective from a camera in the leading cab — so it can't disagree
+with the map, and it swings through a crossover exactly as the train's body
+does on the map.
+
+- **Signals show their real aspect.** Approach a home signal you've been
+  cleared past and it shows green; the starter at the end of your platform
+  stands at red until you're allowed to leave. Signals for the other
+  direction show you their backs.
+- **The trains are modelled, not boxed.** Every vehicle is built to match
+  what the map draws for it: multiple units with raked, streamlined cabs,
+  doors and window rows; electric locomotives with warning-yellow cabs at
+  both ends, machine-room grilles, and the leading pantograph down and the
+  trailing one up; the diesel as a grey hood unit — radiator grilles, fan
+  shrouds and an exhaust stack on the long hood, walkways and handrails
+  down both sides, a fuel tank slung between three-axle trucks — with its
+  warning-yellow cab riding high behind a short nose that tapers to the
+  point the map draws, a snowplough pilot and ditch lights below it; and
+  hoppers, tanks and container flats loaded exactly as on
+  the map, down to the containers' colours. All of them run on bogies, with
+  buffers, couplers and gangways where they belong, and head- and tail-lamps
+  that light up at dusk.
+- **The console** along the bottom gives your speed, a repeater of the next
+  signal ahead, the road you're booked into and what the train is doing.
+- **It gets dark with the shift**, with the headlamp picking out the line
+  ahead.
+
+The window sizes itself to the top-left corner of the map, west of the
+station building, reaching down over the boundary fence and open ground as
+far as the first thing actually in play: a rail (with room for a train on
+it), a signal, or a through road's sign. The throat fans out as it runs
+east, so a narrower window can drop lower beside it than a wide one can;
+every width is tried and the one with the most picture (between square and
+1.9:1) is kept. It never covers a train, a road or a signal. On a window too
+small to fit a useful picture there it folds down to its title, and says so.
+`C`, or the button in its corner, hides and shows it; that's remembered
+between visits. Clicking a train to ride it doesn't change how clicks work
+otherwise — a waiting train is still selected for a road as before.
+
 ## Sound
 
 Two voices, both synthesised at runtime — there are no audio files to ship, so
@@ -304,6 +351,7 @@ A horn already sounding is cut with everything else, not left to finish.
 | `Space`       | pause / resume      |
 | `Esc`         | deselect            |
 | `M`           | mute / unmute       |
+| `C`           | show / hide the cab view |
 
 ## Layout of the source
 
@@ -313,4 +361,5 @@ A horn already sounding is cut with everything else, not left to finish.
 | `js/geom.js`    | the station roster, the layout generator that turns a road list into real geometry (including the yard, for a terminus, and the scissors-and-lead throat for a realistic station), path building, arc-length maths, the precomputed throat crossing table, the platform<->yard shunt curve |
 | `js/scene.js`   | the permanent way — ballast, sleepers, rails, platforms, the stabling yard, buildings — baked once to an offscreen canvas |
 | `js/train.js`   | rolling stock: consists, movement physics, plan-view rendering |
+| `js/cab.js`     | the cab view: the plan stood up in perspective from the leading cab, and the driver's console |
 | `js/game.js`    | clock, interlocking, scoring, difficulty, HUD and input, and the terminus timetable scheduler |
