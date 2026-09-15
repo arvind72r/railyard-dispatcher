@@ -140,6 +140,30 @@
     ctx.restore();
   }
 
+  /* The same, for a realistic throat's turnouts, which can sit on a sloping
+     lead rather than a level main: drawn in the frame of the line they're on
+     (angle a), with the diverging leg peeling off to `side` of it. */
+  function drawBladesAt(ctx, tp) {
+    var len = 66, i, t;
+    ctx.save();
+    ctx.translate(tp.x, tp.y);
+    ctx.rotate(tp.a);
+    ctx.lineCap = 'round';
+    for (i = 0; i < 2; i++) {
+      ctx.beginPath();
+      for (t = 0; t <= 1.001; t += 0.1) ctx.lineTo(len * t, tp.side * 7 * t * t + (i ? 8.6 : -8.6));
+      ctx.strokeStyle = '#7d8794';
+      ctx.lineWidth = 2.2 - i * 0.2;
+      ctx.stroke();
+    }
+    // point machine on the far side from the diverging leg
+    ctx.fillStyle = '#2b3038';
+    ctx.fillRect(3, tp.side > 0 ? -30 : 20, 14, 10);
+    ctx.fillStyle = '#4e5a68';
+    ctx.fillRect(3, tp.side > 0 ? -30 : 20, 14, 3);
+    ctx.restore();
+  }
+
   /* ---------------- platforms ---------------- */
 
   /* A hanging sign board, the way a real platform announces itself. */
@@ -578,8 +602,12 @@
     for (i = 0; i < segs.length; i++) drawRails(ctx, segs[i]);
 
     // turnout blades where the ladders leave the mains — a terminus has
-    // no west ladder to draw blades for at all (see buildTrackwork).
-    for (i = 0; i < T.length; i++) {
+    // no west ladder to draw blades for at all (see buildTrackwork). A
+    // realistic throat has its own list: one set per real turnout.
+    if (L.ladder) {
+      RY.ladderTurnouts().forEach(function (tp) { drawBladesAt(ctx, tp); });
+    }
+    for (i = 0; i < T.length && !L.ladder; i++) {
       var oA = RY.divOff(L.mainA, T[i].y), oB = RY.divOff(L.mainB, T[i].y);
       if (!L.terminus) {
         drawBlades(ctx, L.xWestHome + oA, L.mainA, T[i].y,  1);

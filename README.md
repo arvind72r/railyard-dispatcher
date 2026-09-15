@@ -7,7 +7,7 @@ station efficiently; three cancelled services and your shift is over.
 
 ## Choosing a station
 
-The opening screen offers four stations, each a genuinely different track
+The opening screen offers five stations, each a genuinely different track
 layout rather than a reskin — the number of roads, how many are through roads
 versus platforms, where those through roads sit, and how the platforms pair
 into islands are all different:
@@ -17,9 +17,10 @@ into islands are all different:
 | Kingsbridge Central   | Standard  | 5     | One through road, two islands either side.    |
 | Bramwell Halt         | Beginner  | 3     | One siding, one island — learn the board.     |
 | Northgate Junction    | Advanced  | 7     | One through road, three islands — busy.       |
+| Northgate Junction (Realistic) | Advanced | 7 | The same roads, through a throat laid like a real one. |
 | Selby Yard            | Standard  | 4     | A through road at each end, one island between.|
 
-A fifth, **MGR Chennai Central** (12 roads, a real terminus with a stabling
+A sixth, **MGR Chennai Central** (12 roads, a real terminus with a stabling
 yard), is built and working but **not currently on the menu** — a different
 style of play is being worked out for it. It is hidden by a single `hidden:
 true` on its entry in `js/geom.js`; nothing else about it is switched off,
@@ -33,11 +34,52 @@ are worked out fresh for each one rather than hand-tuned. Switching only
 happens from the start screen or after a shift ends; the "?" button mid-shift
 shows the rules again without offering to swap the layout out from under you.
 
+### Northgate Junction (Realistic) lays its throat like a real one
+
+Every other station connects each road straight to *both* mains, each by its
+own curve. That's simple, but it isn't how track is built: a main splits
+into as many lines as there are roads, all at once, and the curves off one
+main cut straight across the other's — the classic Northgate throat crosses
+itself 54 times.
+
+The realistic Northgate has the same seven roads, platforms and islands. Only
+the throat differs, and a line in it only ever splits one way at a time:
+
+- **A scissors crossover** just inside each home signal lets a train on either
+  main reach either side of the station. It's the one place track crosses
+  track — once at each end.
+- **Each main then becomes a lead**, one long curve sweeping out to the
+  outermost road on its side, and every road in between **peels off the lead
+  at a turnout of its own**, nearest road first.
+- **The road between the mains (P3)** leaves both mains where they become
+  their leads, and is reachable from either direction without crossing over.
+
+**The interlocking follows the track.** Two moves conflict when they need the
+same turnout or piece of line — not merely, as elsewhere, when their curves
+cross. That makes the side of the station you choose matter:
+
+- **Eastbound** trains run on the lower main, so P3–P6 are theirs to reach
+  directly; **westbound** trains run on the upper main, and TL, P1, P2 and P3
+  are theirs.
+- Put each direction on its own side and both throats can take an arrival
+  and a departure at once. Send a train to the other side and it has to use
+  the scissors, which blocks the opposite direction while it does.
+- In practice that leaves 15 of the 42 possible opposite-direction pairings
+  free to share a throat, against 21 on the classic layout — so it's the
+  harder of the two. It bites hardest on six-car trains: only P1 and P2 (and
+  TL, for freight) are long enough, and they're on the westbound side, so a
+  long eastbound always has to cross over.
+
+A real throat needs more length than the canvas has room for, so its curves
+are laid about half as sharp again as the classic fan's — every curve in it
+to the same radius, as gentle as the space allows, so none is left short and
+kinked.
+
 ### MGR Chennai Central is a different kind of station
 
 *(Currently hidden from the station picker — see above.)*
 
-The other four are all *through* stations — a train can enter one end and
+The other five are all *through* stations — a train can enter one end and
 carry on out the other, with the network on the west and again on the east.
 MGR Chennai Central is a **terminus**, and genuinely shaped like one: every
 platform dead-ends at a buffer stop on the west, against the concourse, and
@@ -268,7 +310,7 @@ A horn already sounding is cut with everything else, not left to finish.
 | File            | Contents |
 |-----------------|----------|
 | `js/audio.js`   | the Web Audio graph: rolling bed, air horn, mute and volume |
-| `js/geom.js`    | the station roster, the layout generator that turns a road list into real geometry (including the yard, for a terminus), path building, arc-length maths, the precomputed throat crossing table, the platform<->yard shunt curve |
+| `js/geom.js`    | the station roster, the layout generator that turns a road list into real geometry (including the yard, for a terminus, and the scissors-and-lead throat for a realistic station), path building, arc-length maths, the precomputed throat crossing table, the platform<->yard shunt curve |
 | `js/scene.js`   | the permanent way — ballast, sleepers, rails, platforms, the stabling yard, buildings — baked once to an offscreen canvas |
 | `js/train.js`   | rolling stock: consists, movement physics, plan-view rendering |
 | `js/game.js`    | clock, interlocking, scoring, difficulty, HUD and input, and the terminus timetable scheduler |
