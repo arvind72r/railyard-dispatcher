@@ -502,7 +502,10 @@
     var p = RY.pathAt(tr.path, cs);
     if (!near(p.x, p.y, 70)) return null;
     var d = dist(p.x, p.y), o = { x: p.x, y: p.y, ca: Math.cos(p.a), sa: Math.sin(p.a) };
-    return { d: d, fn: function () { drawVehicle(tr, vh, o, fogK(d), isFront, isRear); } };
+    var hl = vh.len / 2 - 4, hw = 19, fx = o.ca * hl, fy = o.sa * hl, wx = -o.sa * hw, wy = o.ca * hw;   // its footprint, clear of its neighbours'
+    var fp = footprint([{ x: p.x + fx + wx, y: p.y + fy + wy }, { x: p.x + fx - wx, y: p.y + fy - wy },
+                      { x: p.x - fx - wx, y: p.y - fy - wy }, { x: p.x - fx + wx, y: p.y - fy + wy }]);
+    return { d: d, veh: true, fp: fp, fn: function () { drawVehicle(tr, vh, o, fogK(d), isFront, isRear); } };
   }
 
   /* The diesel, laid out exactly as the map draws it — a grey long hood on
@@ -811,7 +814,7 @@
     // inboard of it (scene.js roadMasts); sorted on its own distance the
     // mast would come out nearer and paint over the head, so the signal
     // sorts a touch nearer than it is — on the mast's face, not behind it.
-    return { d: d - 3, fn: function () {
+    return { d: d - 3, fp: footprint(rect(s.x - 1.8, s.y - 2.4, s.x + 1.8, s.y + 2.4)), fn: function () {
       var k = fogK(d);
       drawBox(rect(s.x - 0.7, s.y - 0.7, s.x + 0.7, s.y + 0.7), 0, 41, C_POST, C_POST, d);
       drawBox(rect(s.x - 1.8, s.y - 2.4, s.x + 1.8, s.y + 2.4), 40, 55, C_HEAD, C_HEAD, d);
@@ -829,12 +832,98 @@
     } };
   }
 
+  /* ---------------- painting order ---------------- */
+  /* Far to near by distance to each thing's middle is right for small things
+     and wrong for long ones side by side: a 100-long carriage and the 40-long
+     platform block beyond it swap order as the train moves, depending on
+     which middle happens to be nearer, and the platform flickers over the
+     train. So every carriage is also settled against everything it could
+     overlap on screen, exactly, in plan: along a sight line they share, the
+     footprint the line reaches first is in front — at every height, however
+     long either is, straight or curved. Those answers are kept, and
+     everything else keeps its distance order. (Things whose footprints
+     overlap — a column on its platform — are left to distance, as before.) */
+  function footprint(pts) {
+    var q = [], lo = Infinity, hi = -Infinity, behind = false, i, c, m;
+    for (i = 0; i < pts.length; i++) {
+      c = toCam(pts[i].x, pts[i].y); q.push({ f: c.f, l: c.l });
+      if (c.f <= NEAR) behind = true;
+      else { m = c.l / c.f; if (m < lo) lo = m; if (m > hi) hi = m; }
+    }
+    return { q: q, lo: behind ? -Infinity : lo, hi: behind ? Infinity : hi };
+  }
+  // distance along the sight line (1, m) to where it enters the quad; Infinity if it misses
+  function entry(q, m) {
+    var t0 = 0, t1 = Infinity, i, a, b, A, B, area = 0;
+    for (i = 0; i < 4; i++) { a = q[i]; b = q[(i + 1) % 4]; area += a.f * b.l - b.f * a.l; }
+    var sg = area > 0 ? 1 : -1;
+    for (i = 0; i < 4; i++) {
+      a = q[i]; b = q[(i + 1) % 4];
+      A = sg * ((b.f - a.f) * m - (b.l - a.l)); B = sg * ((b.l - a.l) * a.f - (b.f - a.f) * a.l);
+      if (A > 1e-9) t0 = Math.max(t0, -B / A);
+      else if (A < -1e-9) t1 = Math.min(t1, -B / A);
+      else if (B < 0) return Infinity;
+    }
+    return t0 <= t1 ? t0 : Infinity;
+  }
+  function apart(p, q) {                          // separating-axis test, two convex quads
+    var polys = [p, q], k, i, a, b, nf, nl, j, v, pmin, pmax, qmin, qmax;
+    for (k = 0; k < 2; k++) for (i = 0; i < 4; i++) {
+      a = polys[k][i]; b = polys[k][(i + 1) % 4]; nf = b.l - a.l; nl = a.f - b.f;
+      pmin = qmin = Infinity; pmax = qmax = -Infinity;
+      for (j = 0; j < 4; j++) {
+        v = p[j].f * nf + p[j].l * nl; if (v < pmin) pmin = v; if (v > pmax) pmax = v;
+        v = q[j].f * nf + q[j].l * nl; if (v < qmin) qmin = v; if (v > qmax) qmax = v;
+      }
+      if (pmax < qmin || qmax < pmin) return true;
+    }
+    return false;
+  }
+  // 1: a is in front of b; -1: b is in front of a; 0: nothing to settle
+  function inFront(a, b) {
+    var A = a.fp, B = b.fp, lo, hi, tries, i, ta, tb;
+    if (!A || !B) return 0;
+    lo = Math.max(A.lo, B.lo); hi = Math.min(A.hi, B.hi);
+    if (lo > hi) return 0;                                  // never behind one another on screen
+    if (!apart(A.q, B.q)) return 0;                         // one stands on or over the other
+    tries = isFinite(lo) && isFinite(hi) ? [(lo + hi) / 2]
+          : isFinite(hi) ? [hi - 0.02, hi - 0.3] : isFinite(lo) ? [lo + 0.02, lo + 0.3] : [0, 0.6, -0.6, 2, -2];
+    for (i = 0; i < tries.length; i++) {
+      ta = entry(A.q, tries[i]); tb = entry(B.q, tries[i]);
+      if (isFinite(ta) && isFinite(tb)) return ta < tb ? 1 : ta > tb ? -1 : 0;
+    }
+    return 0;
+  }
+  /* items come sorted far to near. Each carriage is settled against the
+     rest; then the farthest thing with nothing left to go behind is painted
+     next, and so on (a rare three-way cycle is broken by distance). */
+  function painterOrder(items) {
+    var n = items.length, indeg = [], adj = [], i, j, r, out = [], taken = [], k;
+    for (i = 0; i < n; i++) { indeg.push(0); adj.push([]); taken.push(false); }
+    for (i = 0; i < n; i++) {
+      if (!items[i].veh) continue;
+      for (j = 0; j < n; j++) {
+        if (j === i || (items[j].veh && j < i)) continue;
+        r = inFront(items[i], items[j]);
+        if (r === 1) { adj[j].push(i); indeg[i]++; }        // j first, then i over it
+        else if (r === -1) { adj[i].push(j); indeg[j]++; }
+      }
+    }
+    for (k = 0; k < n; k++) {
+      for (i = 0; i < n && (taken[i] || indeg[i] > 0); i++);
+      if (i === n) for (i = 0; taken[i]; i++);              // a cycle: fall back to distance
+      taken[i] = true; out.push(items[i]);
+      for (j = 0; j < adj[i].length; j++) indeg[adj[i][j]]--;
+    }
+    return out;
+  }
+
   function solidItem(so) {
     var cx = (so.c[0].x + so.c[2].x) / 2, cy = (so.c[0].y + so.c[2].y) / 2;
     var r = Math.max(Math.abs(so.c[2].x - so.c[0].x), Math.abs(so.c[2].y - so.c[0].y)) / 2;
     if (!near(cx, cy, r)) return null;
     var d = dist(cx, cy);
-    return { d: d, fn: function () {
+    return { d: d, fp: footprint(so.c), fn: function () {
       if (so.kind === 'plat') {
         drawBox(so.c, so.z0, so.z1, C_PLATSIDE, C_PLAT, d, { top: function (cc, k) {
           // coping and the yellow line along whichever edges are real faces
@@ -871,7 +960,7 @@
   function mastItem(m) {
     if (!near(m.x, m.y, 10)) return null;
     var d = dist(m.x, m.y);
-    return { d: d, fn: function () {
+    return { d: d, fp: footprint(rect(m.x - 1.6, m.y - 1.6, m.x + 1.6, m.y + 1.6)), fn: function () {
       drawBox(rect(m.x - 1.6, m.y - 1.6, m.x + 1.6, m.y + 1.6), 0, MAST_Z, C_STEEL, C_STEEL, d);
       var a = P3(toCam(m.x, m.y), WIRE_Z + 3), b = P3(toCam(m.wx, m.wy), WIRE_Z + 3);
       strokeLine([a, b], col(C_STEEL, fogK(d), 1), Math.max(0.5, 0.9 * focal / Math.max(40, a.f)));
@@ -1106,6 +1195,7 @@
       }
     }
     items.sort(function (a, b) { return b.d - a.d; });
+    items = painterOrder(items);
     for (i = 0; i < items.length; i++) items[i].fn();
 
     console_(target, sigs, dirCam);
