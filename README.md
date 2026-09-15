@@ -352,6 +352,16 @@ A horn already sounding is cut with everything else, not left to finish.
 | `Esc`         | deselect            |
 | `M`           | mute / unmute       |
 | `C`           | show / hide the cab view |
+| `Q`           | quit the shift and go back to the main menu (asks first) |
+
+**Quit** in the top bar does the same as `Q`: play is held while it asks,
+*Keep playing* (or `Esc`) puts you back exactly where you were, and *Quit to
+main menu* (or `Enter`) abandons the shift unscored and returns to the
+station picker.
+
+The top bar's **Elapsed** readout is real time on shift — not the station
+clock, and not counting pauses — and the end-of-shift report gives it as
+**Time played**, in minutes.
 
 ## Layout of the source
 

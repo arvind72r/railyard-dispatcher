@@ -35,7 +35,7 @@
     state: 'menu',
     trains: [], trackOwner: freshTrackOwner(),
     throat: { W: { pos: null, neg: null }, E: { pos: null, neg: null } },
-    gameT: 360, elapsed: 0, level: 1, score: 0, lives: 3, combo: 0,
+    gameT: 360, elapsed: 0, played: 0, level: 1, score: 0, lives: 3, combo: 0,
     onTime: 0, events: 0, arrivals: 0, dispatched: 0, late: 0,
     spawnIn: 2.5, sel: null, hoverTrack: -1, hoverTrain: null,
     night: 0, fullHouse: false, people: [], lastBoard: 0, ttDone: []
@@ -66,6 +66,16 @@
   function fmtTime(mins) {
     var h = Math.floor(mins / 60) % 24, m = Math.floor(mins % 60);
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  }
+  /* Real seconds on shift, as m:ss (h:mm:ss past the hour) for the top
+     bar and as whole minutes for the end-of-shift report. */
+  function fmtPlayed(secs) {
+    var s = Math.floor(secs), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+    s %= 60;
+    return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function playedMinutes(secs) {
+    return secs < 60 ? 'under 1 min' : Math.round(secs / 60) + ' min';
   }
   function trName(tr) { return tr.svcName || tr.code; }
   function toast(x, y, text, cls) {
@@ -1048,6 +1058,7 @@
 
   function renderHud() {
     document.getElementById('s-clock').textContent = fmtTime(G.gameT);
+    document.getElementById('s-elapsed').textContent = fmtPlayed(G.played);
     document.getElementById('s-score').textContent = Math.max(0, Math.round(G.score)).toLocaleString();
     document.getElementById('s-level').textContent = G.level;
     document.getElementById('s-punct').textContent =
@@ -1171,6 +1182,13 @@
 
   root.addEventListener('keydown', function (e) {
     if (e.target === elVol) return;
+    if (quitAsked) {
+      // the question is the only thing on screen: answer it or go back
+      if (e.key === 'Enter') { e.preventDefault(); quitToMenu(); }
+      else if (e.key === 'Escape' || e.code === 'Space') { e.preventDefault(); cancelQuit(); }
+      return;
+    }
+    if (e.key === 'q' || e.key === 'Q') { askQuit(); return; }
     if (e.code === 'Space') {
       e.preventDefault();
       togglePause();
@@ -1243,6 +1261,61 @@
     showMenu(false);
   });
 
+  /* ---------------- quitting mid-shift ---------------- */
+  /* Abandoning a shift throws it away, so it's asked first, with the play
+     held while the question is up. Going back leaves things exactly as
+     they were — still running, or still paused if it was already. */
+  var quitAsked = false, quitWasRunning = false;
+  var elQuit = document.getElementById('btn-quit');
+
+  function askQuit() {
+    if (quitAsked || (G.state !== 'running' && G.state !== 'paused')) return;
+    quitAsked = true;
+    quitWasRunning = G.state === 'running';
+    pauseGame();
+    elOverlay.innerHTML =
+      '<div class="card"><h1>QUIT <em>SHIFT?</em></h1>' +
+      '<p class="tag">This shift ends here and isn’t scored. You’ll be back at the main menu.</p>' +
+      '<div class="final">' +
+      '<div><label>Score so far</label><span>' + Math.max(0, Math.round(G.score)).toLocaleString() + '</span></div>' +
+      '<div><label>Trains dispatched</label><span>' + G.dispatched + '</span></div>' +
+      '<div><label>Time played</label><span>' + playedMinutes(G.played) + '</span></div>' +
+      '</div><div class="btnrow">' +
+      '<button id="btn-quit-no" class="ghost">KEEP PLAYING</button>' +
+      '<button id="btn-quit-yes">QUIT TO MAIN MENU</button></div>' +
+      '<div class="foot">Enter quit · Esc keep playing</div></div>';
+    elOverlay.classList.add('show');
+  }
+
+  function cancelQuit() {
+    if (!quitAsked) return;
+    quitAsked = false;
+    elOverlay.classList.remove('show');
+    if (quitWasRunning) resumeGame();
+  }
+
+  function quitToMenu() {
+    quitAsked = false;
+    G.state = 'menu';
+    RY.audio.suspend();
+    // clear the board, so the menu sits over an empty station rather than
+    // one frozen mid-shift
+    G.trains = []; G.sel = null; G.hoverTrain = null; G.hoverTrack = -1;
+    G.trackOwner = freshTrackOwner();
+    G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } };
+    RY.cab.reset();
+    elBanner.innerHTML = '';
+    hint('Select a train, then pick a road.');
+    renderBoard(); renderKeys();
+    showMenu(true);
+  }
+
+  elQuit.addEventListener('click', function () { elQuit.blur(); askQuit(); });
+  elOverlay.addEventListener('click', function (e) {
+    if (e.target.id === 'btn-quit-yes') quitToMenu();
+    else if (e.target.id === 'btn-quit-no') cancelQuit();
+  });
+
   /* ================= lifecycle ================= */
   function makePeople() {
     G.people = [];
@@ -1277,6 +1350,7 @@
       '<div class="final">' +
       '<div><label>Final score</label><span>' + Math.max(0, Math.round(G.score)).toLocaleString() + '</span></div>' +
       '<div><label>Trains dispatched</label><span>' + G.dispatched + '</span></div>' +
+      '<div><label>Time played</label><span>' + playedMinutes(G.played) + '</span></div>' +
       '<div><label>Shifts worked</label><span>' + G.level + '</span></div>' +
       '<div><label>Trains handled</label><span>' + G.arrivals + '</span></div>' +
       '<div><label>Punctuality</label><span>' + (G.events ? Math.round(G.onTime / G.events * 100) : 0) + '%</span></div>' +
@@ -1342,7 +1416,7 @@
     G.state = 'running';
     G.trains = []; G.trackOwner = freshTrackOwner();
     G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } };
-    G.gameT = 360; G.elapsed = 0; G.level = 1; G.score = 0; G.lives = 3;
+    G.gameT = 360; G.elapsed = 0; G.played = 0; G.level = 1; G.score = 0; G.lives = 3;
     G.combo = 0; G.onTime = 0; G.events = 0; G.arrivals = 0;
     G.dispatched = 0; G.late = 0;
     G.spawnIn = 2.0; G.sel = null; G.night = 0; G.fullHouse = false;
@@ -1365,9 +1439,13 @@
   /* ================= main loop ================= */
   var last = 0;
   function frame(ts) {
-    var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
+    var raw = last ? Math.max(0, ts - last) / 1000 : 0, dt = Math.min(0.05, raw);
     last = ts;
     if (G.state === 'running') {
+      // The Elapsed readout is wall-clock time, so a slow frame still counts
+      // in full, unlike the sim's clamped step; a frame gap of over a second
+      // means the page was starved, and a hidden tab pauses the shift anyway.
+      G.played += Math.min(1, raw);
       update(dt);
       if (ts - G.lastBoard > 220) { G.lastBoard = ts; renderBoard(); renderKeys(); }
       renderHud();
