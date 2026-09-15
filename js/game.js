@@ -43,14 +43,21 @@
   RY.G = G;
 
   /* ================= canvas fitting ================= */
+  /* With the cab view open, the map is drawn a little smaller than would
+     fill the stage and sat on its bottom edge, so the spare height collects
+     in one band across the top — where the cab window goes, wide — rather
+     than splitting into two thin letterbox strips. Hide the cab and the map
+     fills the stage again. */
+  var MAP_ZOOM_CAB = 0.86;
   function resize() {
     var dpr = Math.min(2, root.devicePixelRatio || 1);
     var w = stage.clientWidth, h = stage.clientHeight;
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-    var sc = Math.min(w / RY.W, h / RY.H);
+    var cab = RY.cab && RY.cab.shown();
+    var sc = Math.min(w / RY.W, h / RY.H) * (cab ? MAP_ZOOM_CAB : 1);
     view.scale = sc;
     view.ox = (w - RY.W * sc) / 2;
-    view.oy = (h - RY.H * sc) / 2;
+    view.oy = cab ? h - RY.H * sc : (h - RY.H * sc) / 2;
     view.dpr = dpr;
   }
   root.addEventListener('resize', resize);
@@ -923,8 +930,14 @@
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = '#0a0e13';
     ctx.fillRect(0, 0, w, h);
+    ctx.save();
     ctx.translate(view.ox, view.oy);
     ctx.scale(view.scale, view.scale);
+    // Trains run on well off the map at both ends; with the map inset
+    // (cab view open) the margins would show them on bare stage. Restored
+    // at the end, or the clip would outlive the frame and fence off the
+    // next frame's clear.
+    ctx.beginPath(); ctx.rect(0, 0, RY.W, RY.H); ctx.clip();
 
     if (RY.sceneCanvas) ctx.drawImage(RY.sceneCanvas, 0, 0, RY.W, RY.H);
 
@@ -970,6 +983,7 @@
     }
     ctx.textAlign = 'right';
     ctx.fillText((L.terminus ? 'NETWORK & YARD' : 'FROM THE EAST') + '  ◀', RY.W - 12, L.mainA - 54);
+    ctx.restore();
     ctx.restore();
   }
 

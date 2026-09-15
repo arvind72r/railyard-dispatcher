@@ -306,13 +306,16 @@ does on the map.
 - **It gets dark with the shift**, with the headlamp picking out the line
   ahead.
 
-The window sizes itself to the top-left corner of the map, west of the
-station building, reaching down over the boundary fence and open ground as
-far as the first thing actually in play: a rail (with room for a train on
-it), a signal, or a through road's sign. The throat fans out as it runs
-east, so a narrower window can drop lower beside it than a wide one can;
-every width is tried and the one with the most picture (between square and
-1.9:1) is kept. It never covers a train, a road or a signal. On a window too
+While it's open the map is drawn at 86% and sat on the bottom of the
+stage, so the spare height gathers in one band across the top instead of
+two thin letterbox strips. The window takes the top-left of that band,
+reaching down over the map's boundary fence and open ground as far as the
+first thing actually in play: a rail (with room for a train on it), a
+signal, a through road's sign, or the station building. Every width is
+tried and the one with the most picture is kept, always wide — between 2:1
+and 2.4:1 — which, with the lens held to a fixed vertical angle, makes it a
+wide-angle view of about 78–88° across. It never covers a train, a road or
+a signal, and hiding it gives the map its full size back. On a window too
 small to fit a useful picture there it folds down to its title, and says so.
 `C`, or the button in its corner, hides and shows it; that's remembered
 between visits. Clicking a train to ride it doesn't change how clicks work

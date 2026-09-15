@@ -956,20 +956,21 @@
   }
 
   /* ---------------- where the window sits ---------------- */
-  /* The top-left corner of the map, down to whatever there is actually in
-     play: every rail (with room for a train on it), every signal, the
-     through-road signs, and the station building from x=660 on. The
-     boundary fence and the open ground around it are fair game. The west
-     throat fans out as it goes east, so a narrower window can drop lower
-     beside it than a wide one can — every width is tried, and the one
-     showing the most picture wins. Worked out afresh for the window and
-     the station. */
+  /* The top-left corner of the stage: the band above the map (game.js sits
+     the map on the bottom edge while this is open), and on down over the
+     map's own fence and open ground to whatever there is actually in play —
+     every rail (with room for a train on it), every signal, the through-road
+     signs, and the station building. Every width is tried, and the one
+     showing the most picture wins, kept wide — between 2:1 and 2.4:1 — for
+     a wide-angle lens (see resize). Worked out afresh for the window, the
+     map's placement and the station. */
   var fitKey = '';
-  var BUILDING_X = 650, CLEAR = 16;   // short of the concourse; half a train and some air
+  var CLEAR = 16;   // half a train and some air
 
   function keepOut(sigs) {
     var out = [], L = RY.LAY;
-    function add(x0, y0, x1, y1) { if (x0 < BUILDING_X) out.push([x0, y0, x1, y1]); }
+    function add(x0, y0, x1, y1) { out.push([x0, y0, x1, y1]); }
+    add(650, 40, 1266, 176);   // the concourse and its entrance canopy (scene.js)
     RY.buildTrackwork().forEach(function (P) {
       for (var k = 1; k < P.pts.length; k++) {
         var a = P.pts[k - 1], b = P.pts[k];
@@ -994,19 +995,25 @@
   function fit(sigs) {
     var v = RY.view, stage = host.parentNode;
     if (!v || !v.scale) return;
-    var key = stage.clientWidth + 'x' + stage.clientHeight + ':' + RY.station.id;
+    var SW = stage.clientWidth, SH = stage.clientHeight;
+    var key = SW + 'x' + SH + ':' + v.scale + ',' + v.ox + ',' + v.oy + ':' + RY.station.id;
     if (key === fitKey) return;
     fitKey = key;
-    var boxes = keepOut(sigs), best = null, R, B, i, pw, ph;
-    for (R = BUILDING_X; R >= 160; R -= 4) {                    // on a near tie, the wider
-      B = RY.H;
-      for (i = 0; i < boxes.length; i++) if (boxes[i][0] < R && boxes[i][1] < B) B = boxes[i][1];
-      pw = v.ox + R * v.scale - 8 - 10 - 14;                    // less gap, margin, padding
-      ph = Math.min(stage.clientHeight - 20, v.oy + B * v.scale - 6) - 10 - 40;   // and header
-      // no wider than 1.9:1 (a slot shows little but sky and ballast),
-      // no taller than square
-      if (pw / ph > 1.9) pw = ph * 1.9;
-      if (ph > pw) ph = pw;
+    // everything to keep clear of, in stage pixels
+    var boxes = keepOut(sigs).map(function (b) {
+      return [v.ox + b[0] * v.scale, v.oy + b[1] * v.scale, v.ox + b[2] * v.scale];
+    });
+    var best = null, R, B, i, pw, ph;
+    for (R = SW - 10; R >= 190; R -= 4) {                       // on a near tie, the wider
+      B = SH - 10;
+      for (i = 0; i < boxes.length; i++) {
+        if (boxes[i][0] < R + 8 && boxes[i][2] > 10 && boxes[i][1] - 6 < B) B = boxes[i][1] - 6;
+      }
+      pw = R - 10 - 14; ph = B - 10 - 40;                       // less margin, padding, header
+      if (ph <= 0) continue;
+      // wide: a slot no thinner than 2.4:1, and never squarer than 2:1
+      if (pw / ph > 2.4) pw = ph * 2.4;
+      if (pw / ph < 2) ph = pw / 2;
       if (!best || pw * ph > best.pw * best.ph * 1.02) best = { pw: pw, ph: ph };
     }
     var tight = !best || best.ph < 88 || best.pw < 150;
@@ -1027,7 +1034,8 @@
       W = r.width; H = r.height;
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
       // from the width, but never so long a lens that a wide, short picture
-      // loses the track just ahead of the nose
+      // loses the track just ahead of the nose — which in the usual 2:1 to
+      // 2.4:1 window makes it a wide angle, about 78–88° across
       focal = Math.min((W / 2) / Math.tan(HFOV / 2), (H / 2) / Math.tan(22 * Math.PI / 180));
       hz = H * 0.38;
     }
@@ -1105,6 +1113,8 @@
     elToggle.textContent = shown ? '▾' : '▸';
     elToggle.title = shown ? 'Hide the cab view (C)' : 'Show the cab view (C)';
     try { root.localStorage.setItem('ry.cab', shown ? 'on' : 'off'); } catch (e) { /* private mode */ }
+    // the map makes room for the window, or takes it back (game.js resize)
+    root.dispatchEvent(new Event('resize'));
   }
   elToggle.addEventListener('click', function () { setShown(!shown); });
   setShown(shown);
@@ -1114,6 +1124,7 @@
     follow: follow,
     target: function () { return target; },
     toggle: function () { setShown(!shown); },
+    shown: function () { return shown; },
     reset: function () { follow(null); worldKey = ''; fitKey = ''; },
     draw: draw,
     drawMarker: drawMarker
