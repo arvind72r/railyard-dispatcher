@@ -471,18 +471,40 @@
   };
 
   /* Overhead line equipment — masts either side, contact wire down the middle.
-     Every path drawn here is kept in RY.olePaths too, so the cab view can put
-     its masts and wire exactly where the map does. */
+     Every path drawn here is kept in RY.olePaths too, masts and all (P.masts,
+     distances along it), so the cab view can put its masts and wire exactly
+     where the map does. Masts go every 170 unless the caller has placed
+     them (see roadMasts). */
+  /* A platform road's masts, as distances along its OLE path (which runs
+     from the west throat, or a terminus road's buffer, to xThroatE). The
+     road's starter signals stand 30 in from each throat (game.js,
+     signalStates: xThroatW + 30 and xThroatE - 30), and on a plain 170 step
+     a mast stood 10 short of the west one and 3 nearer the track, squarely
+     in front of it from the cab. So a mast stands at each starter, carrying
+     it, with the rest spread evenly between; a terminus road has only the
+     east starter, and steps back from it. */
+  function roadMasts(len) {
+    var out = [], s, n, i, a = 30, b = len - 30;
+    if (L.terminus) {
+      for (s = b; s > 20; s -= 170) out.unshift(s);
+      return out;
+    }
+    n = Math.max(1, Math.round((b - a) / 170));
+    for (i = 0; i <= n; i++) out.push(a + (b - a) * i / n);
+    return out;
+  }
+
   function drawOLE(ctx, P) {
-    var s, p, o;
+    var s, p, o, k;
+    if (!P.masts) for (P.masts = [], s = 40; s < P.len; s += 170) P.masts.push(s);
     RY.olePaths.push(P);
     ctx.save();
     poly(ctx, P.pts);
     ctx.strokeStyle = 'rgba(190,200,212,.13)';
     ctx.lineWidth = 1;
     ctx.stroke();
-    for (s = 40; s < P.len; s += 170) {
-      p = RY.pathAt(P, s);
+    for (k = 0; k < P.masts.length; k++) {
+      p = RY.pathAt(P, P.masts[k]);
       ctx.save();
       ctx.translate(p.x, p.y); ctx.rotate(p.a);
       for (o = -1; o <= 1; o += 2) {
@@ -631,7 +653,9 @@
     drawOLE(ctx, RY.makePath([{ x: L.xEastHome - 40, y: L.mainB }, { x: RY.W, y: L.mainB }]));
     for (i = 0; i < T.length; i++) {
       var oleWest = L.terminus ? RY.platSpan(T[i]).x0 : L.xThroatW;
-      drawOLE(ctx, RY.makePath([{ x: oleWest, y: T[i].y }, { x: L.xThroatE, y: T[i].y }]));
+      var road = RY.makePath([{ x: oleWest, y: T[i].y }, { x: L.xThroatE, y: T[i].y }]);
+      road.masts = roadMasts(road.len);
+      drawOLE(ctx, road);
     }
 
     drawTroughing(ctx, T[0].y - 40, 0, RY.W);

@@ -287,7 +287,9 @@ does on the map.
 - **Signals show their real aspect.** Approach a home signal you've been
   cleared past and it shows green; the starter at the end of your platform
   stands at red until you're allowed to leave. Signals for the other
-  direction show you their backs.
+  direction show you their backs. Each platform road's overhead-line masts
+  are spaced so one stands at each of its starter signals and carries it,
+  so no mast ever stands between you and the signal you're reading.
 - **The trains are modelled, not boxed.** Every vehicle is built to match
   what the map draws for it: multiple units with raked, streamlined cabs,
   doors and window rows; electric locomotives with warning-yellow cabs at

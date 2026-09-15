@@ -209,8 +209,8 @@
         j = Math.min(n, i + CHUNK);
         w.wires.push({ cx: (pts[i].x + pts[j].x) / 2, cy: (pts[i].y + pts[j].y) / 2, pts: pts.slice(i, j + 1) });
       }
-      for (s = 40; s < P.len; s += 170) {
-        p = RY.pathAt(P, s);
+      for (s = 0; s < P.masts.length; s++) {                    // placed by scene.js drawOLE
+        p = RY.pathAt(P, P.masts[s]);
         for (o = -1; o <= 1; o += 2) {
           w.masts.push({ x: p.x - Math.sin(p.a) * o * 31, y: p.y + Math.cos(p.a) * o * 31, wx: p.x, wy: p.y });
         }
@@ -815,7 +815,11 @@
   function signalItem(s, dirCam) {
     if (!near(s.x, s.y, 10)) return null;
     var d = dist(s.x, s.y);
-    return { d: d, fn: function () {
+    // A platform road's starter is carried on an OLE mast that stands just
+    // inboard of it (scene.js roadMasts); sorted on its own distance the
+    // mast would come out nearer and paint over the head, so the signal
+    // sorts a touch nearer than it is — on the mast's face, not behind it.
+    return { d: d - 3, fn: function () {
       var k = fogK(d);
       drawBox(rect(s.x - 0.7, s.y - 0.7, s.x + 0.7, s.y + 0.7), 0, 41, C_POST, C_POST, d);
       drawBox(rect(s.x - 1.8, s.y - 2.4, s.x + 1.8, s.y + 2.4), 40, 55, C_HEAD, C_HEAD, d);
