@@ -31,7 +31,7 @@ body{
 }
 .bname{font-size:13px;font-weight:700;letter-spacing:.12em}
 .bsub{font-size:10px;color:var(--dim);letter-spacing:.08em}
-/* Eight readouts have to share this bar with the brand and the controls,
+/* Nine readouts have to share this bar with the brand and the controls,
    so the labels are allowed to clip before the numbers ever do. */
 .stats{display:flex;gap:16px;flex:1;min-width:0}
 .stat{display:flex;flex-direction:column;gap:1px;min-width:0;flex:0 1 auto}
@@ -40,6 +40,7 @@ body{
 .stat span{font-family:var(--mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;
   white-space:nowrap}
 #s-clock{color:var(--amber)}
+#s-elapsed{color:#c3cede}
 #s-score{color:var(--green)}
 .lives span{color:var(--red);letter-spacing:2px}
 #s-disp{color:var(--green)}
@@ -48,8 +49,15 @@ body{
    is the widest value on the bar; below full width, tighten the spacing and
    the digits rather than let any number clip. */
 @media (max-width:1240px){
+  #topbar{gap:14px}
+  .brand{min-width:0}
   .stats{gap:10px}
   .stat span{font-size:15px}
+}
+/* Narrower still, the station's name gives way to the numbers — it's on
+   the tab title, and the menu, anyway. */
+@media (max-width:1160px){
+  .brand > div{display:none}
 }
 @media (max-width:1060px){
   .stats{gap:7px}
@@ -84,6 +92,8 @@ body{
   background:var(--panel2);color:var(--ink);font-size:15px;cursor:pointer;
 }
 .ctrls button:hover{background:#26303f;border-color:#3a4757}
+.ctrls button.wide{width:auto;padding:0 11px;font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--dim)}
+.ctrls button.wide:hover{color:var(--ink)}
 
 /* ---------- stage ---------- */
 #stage{grid-area:stage;position:relative;overflow:hidden;background:#0a0e13}
@@ -157,6 +167,35 @@ body{
 .st-late{background:#3d1712;color:#ff8a72}
 .empty{color:#5b687a;font-size:12px;text-align:center;padding:26px 10px;line-height:1.6}
 
+/* ---------- cab view ---------- */
+/* A picture-in-picture over the empty top-left corner of the map: the grass
+   beyond the fence, west of the station building. cab.js sizes it to exactly
+   that space for the window and station you have, so it never covers a
+   track or a train. */
+#cab{position:absolute;left:10px;top:10px;z-index:3;display:flex;flex-direction:column;
+  background:rgba(13,17,23,.93);border:1px solid var(--line);border-radius:9px;
+  box-shadow:0 6px 24px rgba(0,0,0,.55);padding:6px 7px 7px}
+.cabhead{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex:none;min-height:20px}
+.cabtitle{font-size:9px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase;flex:none}
+#cabname{flex:1;min-width:0;font-family:var(--mono);font-size:11px;font-weight:700;color:#58c6ff;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#cabtoggle{width:22px;height:20px;border:1px solid var(--line);border-radius:5px;background:var(--panel2);
+  color:var(--dim);font-size:10px;line-height:1;cursor:pointer;padding:0;flex:none}
+#cabtoggle:hover{color:var(--ink);border-color:#3a4757}
+.cabwrap{position:relative;flex:1;min-height:0;border-radius:6px;overflow:hidden;background:#07090c;
+  box-shadow:0 0 0 1px #2a3341 inset}
+#cabcv{position:absolute;inset:0;width:100%;height:100%;display:block}
+#cabhint{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:0 20px;
+  font-size:11px;letter-spacing:.06em;color:#5b687a;line-height:1.5}
+#cabhint[hidden]{display:none}
+/* Collapsed, or with no room to show a picture worth looking at: just the
+   header, as a pill in the corner. */
+#cab.off,#cab.tight{width:auto!important;height:auto!important}
+#cab.off .cabwrap,#cab.tight .cabwrap{display:none}
+#cab.off .cabhead,#cab.tight .cabhead{margin-bottom:0}
+#cab.tight:not(.off)::after{content:'Make the window bigger to see it';display:block;margin-top:4px;
+  font-size:10px;letter-spacing:.04em;color:#5b687a}
+
 #assign{border-top:1px solid var(--line);padding:10px}
 .ahead{font-size:9px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase;margin-bottom:7px}
 .akeys{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
@@ -216,6 +255,8 @@ kbd{
   font-size:14px;font-weight:800;letter-spacing:.18em;
 }
 .card button:hover{filter:brightness(1.08)}
+.card .btnrow{display:flex;gap:10px}
+.card button.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
 .foot{margin-top:14px;text-align:center;font-size:11px;color:#5b687a;letter-spacing:.06em}
 .final{display:flex;gap:26px;margin:16px 0 22px;flex-wrap:wrap}
 .final div{display:flex;flex-direction:column;gap:2px}

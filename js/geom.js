@@ -21,7 +21,7 @@
   var LAY = RY.LAY = {
     xWestEnd: 0, xWestHome: 0, xThroatW: 0, xThroatE: 0,
     xEastHome: 0, xEastEnd: 0, mainA: 0, mainB: 0, stopX: 0, maxDiv: 136,
-    terminus: false
+    terminus: false, ladder: null
   };
   RY.TRACKS = [];
   RY.ISLANDS = [];
@@ -57,6 +57,18 @@
      is worked out fresh for the road count and the longest platform,
      rather than hand-placed per station, so a new one is just a list
      of roads away. */
+  /* Northgate's roads, shared by both versions of the station below so that
+     the only thing that differs between them is how the throat is laid. */
+  var NORTHGATE_ROADS = [
+    { short: 'TL', name: 'Through Road', maxCars: 8, platform: false },
+    { short: 'P1', name: 'Platform 1',   maxCars: 6, platform: true  },
+    { short: 'P2', name: 'Platform 2',   maxCars: 6, platform: true  },
+    { short: 'P3', name: 'Platform 3',   maxCars: 5, platform: true  },
+    { short: 'P4', name: 'Platform 4',   maxCars: 5, platform: true  },
+    { short: 'P5', name: 'Platform 5',   maxCars: 4, platform: true  },
+    { short: 'P6', name: 'Platform 6',   maxCars: 4, platform: true  }
+  ];
+
   RY.STATIONS = [
     {
       id: 'kingsbridge', name: 'Kingsbridge Central', difficulty: 'Standard',
@@ -83,15 +95,22 @@
     {
       id: 'northgate', name: 'Northgate Junction', difficulty: 'Advanced',
       blurb: 'Where three lines meet — three islands flank a busy through road.',
-      tracks: [
-        { short: 'TL', name: 'Through Road', maxCars: 8, platform: false },
-        { short: 'P1', name: 'Platform 1',   maxCars: 6, platform: true  },
-        { short: 'P2', name: 'Platform 2',   maxCars: 6, platform: true  },
-        { short: 'P3', name: 'Platform 3',   maxCars: 5, platform: true  },
-        { short: 'P4', name: 'Platform 4',   maxCars: 5, platform: true  },
-        { short: 'P5', name: 'Platform 5',   maxCars: 4, platform: true  },
-        { short: 'P6', name: 'Platform 6',   maxCars: 4, platform: true  }
-      ],
+      tracks: NORTHGATE_ROADS,
+      islands: [[1, 2], [3, 4], [5, 6]]
+    },
+    /* The same station with a throat laid the way a real one is. Every other
+       station fans each road straight off both mains, so a main splits into
+       as many lines as there are roads, all at once. Here a main only ever
+       splits one way at a time: a scissors crossover lets either main reach
+       either side, then each main steps outward a road at a time, every step
+       a single turnout onto the next road along — see planLadder(). The
+       interlocking follows the track: two moves conflict when they need the
+       same turnout or piece of line, not merely when their curves cross. */
+    {
+      id: 'northgate-real', name: 'Northgate Junction (Realistic)', difficulty: 'Advanced',
+      throat: 'ladder',
+      blurb: 'The same seven roads, through a throat laid like a real one: a scissors crossover, then one turnout at a time.',
+      tracks: NORTHGATE_ROADS,
       islands: [[1, 2], [3, 4], [5, 6]]
     },
     {
@@ -216,6 +235,136 @@
      signal box scene.js draws near the west edge. */
   var TERM_THROAT_X = 1120, TERM_HOME_GAP = 170, TERM_YARD_GAP = 96;
 
+  /* ---- the realistic throat --------------------------------------------
+     Worked out once per station in "u", the distance inward from the home
+     signal, so the same plan serves both ends (see ladX). In order, going in:
+
+       - a scissors crossover between the mains, so a train on either main
+         can reach either side of the station;
+       - the road lying between the mains, if there is one, split off both
+         mains at once and joined in a Y;
+       - then each main becomes a lead: one long curve sweeping out to the
+         outermost road on its side, with every road in between peeling off
+         it at a turnout of its own, nearest road first.
+
+     So a line only ever splits one way at a time, which is the whole point,
+     and the curves stay as long and gentle as the old fan's. (An earlier cut
+     stepped road to road instead; every step came out shorter than a coach,
+     and trains visibly jerked across the throat.) Roads above main A are
+     main A's to serve, roads below main B main B's. */
+  var LAD_LEAD = 12,      // home signal to the scissors
+      LAD_GAP = 8,        // scissors to where each main becomes its lead
+      LAD_MARGIN = 50,    // end of the throat to the longest platform's ramp
+      LAD_MIN_HOME = 110, // keep the home signal, and whoever waits at it, on stage
+      LAD_GENTLE = 18.5,  // the most room a curve gets: no gentler than the old fan needed
+      LAD_BRANCH = 0.6,   // a road's curve off the lead, as a share of the lead's length
+      LAD_ALPHA = 2.25;   // how much a branch keeps the lead's heading as it leaves:
+                          // above 1.5 it bends away at once, below 3 it never overshoots
+  /* Every curve in the throat is laid to one sharpness: a curve moving dy
+     across over k*sqrt(dy) keeps dy/len^2 — its curvature — the same
+     whatever its offset. k is the most the room allows (see planLadder),
+     so the scissors, the leads and the middle road all bend alike and
+     none is left short and sharp. */
+  function ladCurve(k, dy) { return k * Math.sqrt(Math.abs(dy)); }
+  function dsmooth(t) { return 30 * t * t * (1 - t) * (1 - t); }      // d/dt of smooth()
+  function invSmooth(v) {
+    var lo = 0, hi = 1, m, k;
+    for (k = 0; k < 40; k++) { m = (lo + hi) / 2; if (smooth(m) < v) lo = m; else hi = m; }
+    return (lo + hi) / 2;
+  }
+
+  /* Where along a lead (W across, L long) a road w out from the main turns
+     off, and how long its curve is. Leaving where the lead is still nearly
+     level makes a long lazy curve; leaving where it's steep, a short sharp
+     one — so search for the spot giving the wanted length, but never before
+     the lead has cleared the previous road (tMin), or the two would cross. */
+  function ladBranch(W, L, tMin, w) {
+    var want = LAD_BRANCH * L, lo = tMin + 1e-4, hi = invSmooth(w / W) - 1e-4, m, k;
+    function at(t) {
+      var wt = W * smooth(t), sl = W * dsmooth(t) / L;
+      return { t: t, wt: wt, s: sl, len: LAD_ALPHA * (w - wt) / sl };
+    }
+    if (at(lo).len <= want) return at(lo);
+    for (k = 0; k < 40; k++) { m = (lo + hi) / 2; if (at(m).len > want) lo = m; else hi = m; }
+    return at((lo + hi) / 2);
+  }
+
+  function planLadder(tracks, mainA, mainB, room) {
+    var upper = [], lower = [], middle = [], i, t, u, id;
+    for (i = 0; i < tracks.length; i++) {
+      t = tracks[i];
+      if (t.y < mainA - 1) upper.push(t);
+      else if (t.y > mainB + 1) lower.push(t);
+      else middle.push(t);
+    }
+    // Each main needs a side of its own to fan out into, and there's room
+    // between the mains for one road, not a fan of them.
+    if (!upper.length || !lower.length || middle.length > 1) return null;
+    upper.sort(function (a, b) { return b.y - a.y; });   // nearest main A first
+    lower.sort(function (a, b) { return a.y - b.y; });   // nearest main B first
+
+    var p = { groupOf: {}, landing: {}, fans: {}, mid: null };
+    var dyMains = mainB - mainA;
+    var wMax = Math.max(mainA - upper[upper.length - 1].y, lower[lower.length - 1].y - mainB);
+    // The scissors and the longest lead are the only curves laid end to end;
+    // everything else runs alongside one of them. Share out what's left.
+    var k = Math.min(LAD_GENTLE,
+                     (room - LAD_LEAD - LAD_GAP) / (Math.sqrt(dyMains) + Math.sqrt(wMax)));
+    p.k = k;
+    p.s0 = LAD_LEAD;
+    p.s1 = p.s0 + ladCurve(k, dyMains);
+    u = p.s1 + LAD_GAP;
+    p.fanStart = u;
+    [['A', upper, mainA], ['B', lower, mainB]].forEach(function (g) {
+      var key = g[0], roads = g[1], yM = g[2], outer = roads[roads.length - 1];
+      var sg = outer.y > yM ? 1 : -1, W = Math.abs(outer.y - yM), L = ladCurve(k, W);
+      var fan = { outer: outer.id, u0: u, u1: u + L, y0: yM, y1: outer.y, sg: sg, branches: [] };
+      var tMin = 0, j, r, w, br;
+      for (j = 0; j < roads.length - 1; j++) {
+        r = roads[j]; w = Math.abs(r.y - yM);
+        br = ladBranch(W, L, tMin, w);
+        // m0t is the branch's starting slope in per-curve units, so it stays
+        // tangent to the lead however the plan is stretched below.
+        fan.branches.push({ road: r.id, t: br.t, u0: u + br.t * L, u1: u + br.t * L + br.len,
+                            y0: yM + sg * br.wt, y1: r.y, m0t: sg * br.s * br.len });
+        p.groupOf[r.id] = key;
+        p.landing[r.id] = u + br.t * L + br.len;
+        tMin = invSmooth(w / W);          // the lead passes this road here
+      }
+      p.groupOf[outer.id] = key;
+      p.landing[outer.id] = fan.u1;
+      p.fans[key] = fan;
+    });
+    // The road between the mains leaves each main right where that main
+    // becomes its lead — a wye, one turnout, the two legs going opposite ways
+    // — and runs alongside the fans rather than ahead of them, so it costs
+    // the throat no length and can be as long and gentle as the leads.
+    if (middle.length) {
+      t = middle[0];
+      p.mid = { road: t.id, y: t.y, u0: u,
+                u1: u + Math.min(p.fans.A.u1 - u, p.fans.B.u1 - u) };
+      p.groupOf[t.id] = 'M';
+      p.landing[t.id] = p.mid.u1;
+    }
+    p.T = 0;
+    for (id in p.landing) p.T = Math.max(p.T, p.landing[id]);
+
+    // Too long for the canvas: tighten every length together, which steepens
+    // the curves but keeps every turnout in exactly the planned order.
+    if (p.T > room) {
+      var f = room / p.T;
+      p.s0 *= f; p.s1 *= f; p.fanStart *= f; p.T = room;
+      if (p.mid) { p.mid.u0 *= f; p.mid.u1 *= f; }
+      ['A', 'B'].forEach(function (k) {
+        var fan = p.fans[k];
+        fan.u0 *= f; fan.u1 *= f;
+        fan.branches.forEach(function (br) { br.u0 *= f; br.u1 *= f; });
+      });
+      for (id in p.landing) p.landing[id] *= f;
+    }
+    return p;
+  }
+
   /* Every road, whatever the station, connects to its throat/mains through
      a ladder of the same kind — only the road count and the longest
      platform change how far apart things need to be. */
@@ -249,7 +398,7 @@
         xThroatW: xThroatE, xThroatE: xThroatE,
         xEastHome: xEastHome, xEastEnd: xEastHome + 900,
         mainA: CENTER_Y - 50, mainB: CENTER_Y + 50,
-        stopX: stopX, maxDiv: 136, terminus: true
+        stopX: stopX, maxDiv: 136, terminus: true, ladder: null
       };
       lay.yardNear = xEastHome + 40;    // where a shunt move first leaves the main
       lay.yardFar = RY.W - 60;          // how far into the yard a stabled train sits
@@ -260,15 +409,23 @@
         yard.push({ id: yi, y: ytop + yi * ygap, maxCars: 7, occupant: null });
       }
     } else {
-      var homeGap = 340;
-      var xThroatW = stopX - half - 90, xThroatE = stopX + half + 90;
+      // A realistic throat is laid longer and stops closer to the platforms,
+      // so its length comes out of the plan rather than a fixed gap.
+      var plan = null, margin = 90, homeGap = 340;
+      if (def.throat === 'ladder') {
+        plan = planLadder(tracks, CENTER_Y - 50, CENTER_Y + 50,
+                          stopX - half - LAD_MARGIN - LAD_MIN_HOME);
+        if (plan) { margin = LAD_MARGIN; homeGap = plan.T; }
+        else if (root.console) root.console.warn(def.id + ": road list doesn't suit a realistic throat; using the classic fan");
+      }
+      var xThroatW = stopX - half - margin, xThroatE = stopX + half + margin;
       var xWestHome = xThroatW - homeGap, xEastHome = xThroatE + homeGap;
       lay = {
         xWestEnd: xWestHome - 900, xWestHome: xWestHome,
         xThroatW: xThroatW, xThroatE: xThroatE,
         xEastHome: xEastHome, xEastEnd: xEastHome + 900,
         mainA: CENTER_Y - 50, mainB: CENTER_Y + 50,
-        stopX: stopX, maxDiv: 136, terminus: false
+        stopX: stopX, maxDiv: 136, terminus: false, ladder: plan
       };
     }
 
@@ -360,6 +517,130 @@
     return null;
   }
 
+  /* ---- realistic throat: routes, conflicts, drawing ---------------------
+     Both ends are laid from the one plan, mirrored: u runs inward from each
+     home signal. A dir>0 train always runs on main B and a dir<0 train on
+     main A, at either end, so a route is just "from this main to that road".
+     A road on the other main's side is reached over the scissors. */
+  function ladX(side, u) { return side === 'W' ? LAY.xWestHome + u : LAY.xEastHome - u; }
+  function ladMainY(key) { return key === 'A' ? LAY.mainA : LAY.mainB; }
+  function ladOther(key) { return key === 'A' ? 'B' : 'A'; }
+
+  /* The lead, from where its main becomes it out to parameter t1. */
+  function ladLeadPts(side, fan, t1) {
+    var n = Math.max(6, Math.round(CURVE_N * t1)), L = fan.u1 - fan.u0, pts = [], i, t;
+    for (i = 0; i <= n; i++) {
+      t = t1 * i / n;
+      pts.push({ x: ladX(side, fan.u0 + t * L), y: fan.y0 + (fan.y1 - fan.y0) * smooth(t) });
+    }
+    return pts;
+  }
+  /* A road's curve off the lead: leaves tangent to it, lands level on the
+     road (a cubic Hermite with that start slope and none at the end). */
+  function ladBranchPts(side, br) {
+    var n = 64, dy = br.y1 - br.y0, pts = [], i, t;
+    for (i = 0; i <= n; i++) {
+      t = i / n;
+      pts.push({ x: ladX(side, br.u0 + t * (br.u1 - br.u0)),
+                 y: br.y0 + dy * (3 * t * t - 2 * t * t * t) + br.m0t * (t - 2 * t * t + t * t * t) });
+    }
+    return pts;
+  }
+
+  /* Points from the home signal inward to where road `id` runs straight. */
+  function ladderRoute(side, from, id) {
+    var p = LAY.ladder, g = p.groupOf[id], on = from, pts, k, fan, br;
+    pts = [{ x: ladX(side, 0), y: ladMainY(from) }];
+    if (g !== from && g !== 'M') {
+      on = ladOther(from);
+      cat(pts, RY.sCurve(ladX(side, p.s0), ladMainY(from),
+                         ladX(side, p.s1), ladMainY(on), CURVE_N), false);
+    }
+    if (g === 'M') {
+      pts.push({ x: ladX(side, p.mid.u0), y: ladMainY(on) });
+      cat(pts, RY.sCurve(ladX(side, p.mid.u0), ladMainY(on),
+                         ladX(side, p.mid.u1), p.mid.y, CURVE_N), true);
+      return pts;
+    }
+    fan = p.fans[on];
+    pts.push({ x: ladX(side, fan.u0), y: fan.y0 });
+    if (id === fan.outer) { cat(pts, ladLeadPts(side, fan, 1), true); return pts; }
+    for (k = 0; k < fan.branches.length; k++) {
+      br = fan.branches[k];
+      if (br.road !== id) continue;
+      cat(pts, ladLeadPts(side, fan, br.t), true);
+      cat(pts, ladBranchPts(side, br), true);
+      break;
+    }
+    return pts;
+  }
+
+  /* The track a route occupies at one end: every turnout it passes through
+     (either leg) and every piece of plain line between them, plus the
+     scissors' diamond, which both of its diagonals cross. That's what a real
+     interlocking locks, so it's what decides whether two moves can run at
+     once. The plan is the same at both ends, so the answer is too. */
+  function ladderRes(from, id) {
+    var p = LAY.ladder, g = p.groupOf[id], on = from, res = {}, k, fan;
+    function add(r) { res[r] = true; }
+    add(from + ':approach'); add(from + '@s0');
+    if (g !== from && g !== 'M') {
+      on = ladOther(from);
+      add('X' + from + on); add('diamond'); add(on + '@s1');
+    } else {
+      add(from + ':scissors'); add(from + '@s1');
+    }
+    add(on + ':after');
+    if (p.mid) add(on + '@mid');
+    if (g === 'M') { add('M' + on); add('Y'); return res; }
+    fan = p.fans[on];
+    for (k = 0; k < fan.branches.length; k++) {
+      add(on + ':lead' + k);                     // lead up to the k-th turnout
+      add(on + '@b' + k);                        // the turnout itself
+      if (fan.branches[k].road === id) { add(on + '>b' + k); return res; }
+    }
+    add(on + ':lead' + k);                       // the last stretch, to the outermost road
+    return res;
+  }
+
+  /* Where to draw point blades. Each: position, the heading of the line it
+     sits on (pointing the way the diverging leg goes), and which side of
+     that heading the leg peels off to — measured off the real curves, so a
+     turnout on the sloping lead gets blades that lie along the lead. */
+  function ladFrame(at, dx, dy, q) {
+    var n = Math.sqrt(dx * dx + dy * dy); dx /= n; dy /= n;
+    var cr = dx * (q.y - at.y) - dy * (q.x - at.x);
+    return { x: at.x, y: at.y, a: Math.atan2(dy, dx), side: cr > 0 ? 1 : -1 };
+  }
+  RY.ladderTurnouts = function () {
+    var p = LAY.ladder, out = [];
+    if (!p) return out;
+    ['W', 'E'].forEach(function (side) {
+      var inw = side === 'W' ? 1 : -1, yA = LAY.mainA, yB = LAY.mainB, d1, d2, m, pts;
+      d1 = RY.sCurve(ladX(side, p.s0), yA, ladX(side, p.s1), yB, CURVE_N);
+      d2 = RY.sCurve(ladX(side, p.s0), yB, ladX(side, p.s1), yA, CURVE_N);
+      out.push(ladFrame(d1[0], inw, 0, d1[4]));
+      out.push(ladFrame(d2[0], inw, 0, d2[4]));
+      out.push(ladFrame(d1[d1.length - 1], -inw, 0, d1[d1.length - 5]));
+      out.push(ladFrame(d2[d2.length - 1], -inw, 0, d2[d2.length - 5]));
+      if (p.mid) {
+        [yA, yB].forEach(function (yM) {
+          m = RY.sCurve(ladX(side, p.mid.u0), yM, ladX(side, p.mid.u1), p.mid.y, CURVE_N);
+          out.push(ladFrame(m[0], inw, 0, m[4]));
+        });
+      }
+      // A main becoming its lead isn't a turnout; every road off the lead is.
+      ['A', 'B'].forEach(function (key) {
+        var fan = p.fans[key], L = fan.u1 - fan.u0;
+        fan.branches.forEach(function (br) {
+          pts = ladBranchPts(side, br);
+          out.push(ladFrame(pts[0], inw, fan.sg * Math.abs(fan.y1 - fan.y0) * dsmooth(br.t) / L, pts[3]));
+        });
+      });
+    });
+    return out;
+  };
+
   /* Full journey: off-stage -> home signal -> throat -> road -> throat
      -> off-stage.  Arc length from the start to the home signal is the
      same on every road, so a waiting train can be re-routed in place.
@@ -390,6 +671,22 @@
         p.push({ x: bufX, y: trackY }, { x: LAY.xThroatE, y: trackY });
         cat(p, RY.sCurve(LAY.xThroatE, trackY, LAY.xEastHome - off, my, CURVE_N), true);
         p.push({ x: LAY.xEastHome, y: my }, { x: LAY.xEastEnd, y: my });
+      }
+      return RY.makePath(p);
+    }
+    if (LAY.ladder) {
+      var road = trackAtY(trackY), id = road ? road.id : 0, from = dir > 0 ? 'B' : 'A';
+      var w = ladderRoute('W', from, id), e = ladderRoute('E', from, id);
+      if (dir > 0) {
+        p.push({ x: LAY.xWestEnd, y: my });
+        cat(p, w, false);
+        cat(p, e.slice().reverse(), false);
+        p.push({ x: LAY.xEastEnd, y: my });
+      } else {
+        p.push({ x: LAY.xEastEnd, y: my });
+        cat(p, e, false);
+        cat(p, w.slice().reverse(), false);
+        p.push({ x: LAY.xWestEnd, y: my });
       }
       return RY.makePath(p);
     }
@@ -478,7 +775,22 @@
     }
     return false;
   }
+  function buildLadderCrossTable() {
+    var table = { W: [], E: [] }, n = RY.TRACKS.length, i, j, a, b, key, hit;
+    for (i = 0; i < n; i++) {
+      table.W[i] = []; table.E[i] = [];
+      a = ladderRes('B', i);                    // the dir>0 route, on main B
+      for (j = 0; j < n; j++) {
+        b = ladderRes('A', j);                  // the dir<0 route, on main A
+        hit = false;
+        for (key in a) if (b[key]) { hit = true; break; }
+        table.W[i][j] = table.E[i][j] = hit;
+      }
+    }
+    return table;
+  }
   function buildCrossTable() {
+    if (LAY.ladder) return buildLadderCrossTable();
     var sides = { W: [LAY.xWestHome, LAY.xThroatW], E: [LAY.xThroatE, LAY.xEastHome] };
     var table = {}, side, span, lo, hi, i, j;
     for (side in sides) {
@@ -525,6 +837,37 @@
   /* ---- the static segment list used to draw the permanent way ---- */
   RY.buildTrackwork = function () {
     var segs = [], t, i, offA, offB;
+
+    if (LAY.ladder) {
+      var p = LAY.ladder, yA = LAY.mainA, yB = LAY.mainB;
+      ['W', 'E'].forEach(function (side) {
+        var end = side === 'W' ? LAY.xWestEnd : LAY.xEastEnd;
+        // each main, from off-stage to where it becomes its lead
+        segs.push(RY.makePath([{ x: end, y: yA }, { x: ladX(side, p.fanStart), y: yA }]));
+        segs.push(RY.makePath([{ x: end, y: yB }, { x: ladX(side, p.fanStart), y: yB }]));
+        // the scissors
+        segs.push(RY.makePath(RY.sCurve(ladX(side, p.s0), yA, ladX(side, p.s1), yB, CURVE_N)));
+        segs.push(RY.makePath(RY.sCurve(ladX(side, p.s0), yB, ladX(side, p.s1), yA, CURVE_N)));
+        // the road between the mains, off both of them
+        if (p.mid) {
+          segs.push(RY.makePath(RY.sCurve(ladX(side, p.mid.u0), yA, ladX(side, p.mid.u1), p.mid.y, CURVE_N)));
+          segs.push(RY.makePath(RY.sCurve(ladX(side, p.mid.u0), yB, ladX(side, p.mid.u1), p.mid.y, CURVE_N)));
+        }
+        // each lead, and every road's curve off it
+        ['A', 'B'].forEach(function (key) {
+          var fan = p.fans[key];
+          segs.push(RY.makePath(ladLeadPts(side, fan, 1)));
+          fan.branches.forEach(function (br) { segs.push(RY.makePath(ladBranchPts(side, br))); });
+        });
+      });
+      // every road straight, from where it leaves one throat to the other
+      for (i = 0; i < RY.TRACKS.length; i++) {
+        t = RY.TRACKS[i];
+        segs.push(RY.makePath([{ x: ladX('W', p.landing[t.id]), y: t.y },
+                               { x: ladX('E', p.landing[t.id]), y: t.y }]));
+      }
+      return segs;
+    }
 
     // Main-line tails, running as far as the last turnout in each throat.
     // A terminus has no west throat at all — its roads dead-end at their

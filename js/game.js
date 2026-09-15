@@ -9,6 +9,11 @@
   var LEVEL_SECS = 68;          // real seconds per shift
   var LATE_MAX   = 8;           // minutes late before a service is cancelled
   var LATE_AFTER = 0.75;        // minutes past booked before one reads as late
+  /* How far short of a red signal a train draws up. Stopped with its nose
+     at the post, the driver's already past the head — it stands 34-42 to
+     the side and well above eye level — so it's out of the cab view's
+     picture; this far back it's squarely in it. */
+  var SIGNAL_SIGHT = 80;
   var MINS_PER_SEC = 1;         // station clock runs a minute a second
 
   var cv  = document.getElementById('cv');
@@ -20,7 +25,7 @@
   var elHint   = document.getElementById('hint');
   var elOverlay = document.getElementById('overlay');
 
-  var view = { scale: 1, ox: 0, oy: 0 };
+  var view = RY.view = { scale: 1, ox: 0, oy: 0 };   // shared: the cab view fits itself around the map
   var introHTML = elOverlay.innerHTML;
   var selectedStationId = RY.station.id;   // whatever geom.js booted with
 
@@ -35,7 +40,7 @@
     state: 'menu',
     trains: [], trackOwner: freshTrackOwner(),
     throat: { W: { pos: null, neg: null }, E: { pos: null, neg: null } },
-    gameT: 360, elapsed: 0, level: 1, score: 0, lives: 3, combo: 0,
+    gameT: 360, elapsed: 0, played: 0, level: 1, score: 0, lives: 3, combo: 0,
     onTime: 0, events: 0, arrivals: 0, dispatched: 0, late: 0,
     spawnIn: 2.5, sel: null, hoverTrack: -1, hoverTrain: null,
     night: 0, fullHouse: false, people: [], lastBoard: 0, ttDone: []
@@ -43,14 +48,21 @@
   RY.G = G;
 
   /* ================= canvas fitting ================= */
+  /* With the cab view open, the map is drawn a little smaller than would
+     fill the stage and sat on its bottom edge, so the spare height collects
+     in one band across the top — where the cab window goes, wide — rather
+     than splitting into two thin letterbox strips. Hide the cab and the map
+     fills the stage again. */
+  var MAP_ZOOM_CAB = 0.86;
   function resize() {
     var dpr = Math.min(2, root.devicePixelRatio || 1);
     var w = stage.clientWidth, h = stage.clientHeight;
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-    var sc = Math.min(w / RY.W, h / RY.H);
+    var cab = RY.cab && RY.cab.shown();
+    var sc = Math.min(w / RY.W, h / RY.H) * (cab ? MAP_ZOOM_CAB : 1);
     view.scale = sc;
     view.ox = (w - RY.W * sc) / 2;
-    view.oy = (h - RY.H * sc) / 2;
+    view.oy = cab ? h - RY.H * sc : (h - RY.H * sc) / 2;
     view.dpr = dpr;
   }
   root.addEventListener('resize', resize);
@@ -66,6 +78,16 @@
   function fmtTime(mins) {
     var h = Math.floor(mins / 60) % 24, m = Math.floor(mins % 60);
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  }
+  /* Real seconds on shift, as m:ss (h:mm:ss past the hour) for the top
+     bar and as whole minutes for the end-of-shift report. */
+  function fmtPlayed(secs) {
+    var s = Math.floor(secs), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+    s %= 60;
+    return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function playedMinutes(secs) {
+    return secs < 60 ? 'under 1 min' : Math.round(secs / 60) + ' min';
   }
   function trName(tr) { return tr.svcName || tr.code; }
   function toast(x, y, text, cls) {
@@ -375,7 +397,7 @@
       for (var i = 0; i < list.length; i++) {
         var t = list[i];
         if (t.state !== 'approach') continue;
-        var tgt = t.sHome;
+        var tgt = t.sHome - SIGNAL_SIGHT;
         if (i > 0) tgt = Math.min(tgt, list[i - 1].s - list[i - 1].len - 38);
         t.targetS = Math.max(0, tgt);
       }
@@ -469,9 +491,13 @@
           // reconsidered — the lock later releasing far down the line
           // (routine, once the train is long past here) must not be
           // mistaken for a fresh arrival at the gate.
-          if (!tr.gateCleared && tr.s > tr.sFarGate - 160) {
+          if (!tr.gateCleared && tr.s > tr.sFarGate - SIGNAL_SIGHT - 160) {
             if (throatConflict(farSide, tr, tr.trackId)) {
-              tr.targetS = tr.sFarGate;             // hold clear of the far ladder
+              // hold clear of the far ladder, and short of the starter so
+              // it's in sight — but never so far short that the tail is
+              // left in the entry throat, still holding it (updateResources)
+              var clearS = RY.sAtX(tr.path, tr.dir > 0 ? L.xThroatW + 12 : L.xThroatE - 12);
+              tr.targetS = tr.sFarGate - Math.max(0, Math.min(SIGNAL_SIGHT, tr.sFarGate - tr.len - clearS));
             } else {
               G.throat[farSide][slotOf(tr.dir)] = tr; tr.holdsThroat[farSide] = true;
               tr.targetS = Infinity;                 // clear — run straight through
@@ -733,8 +759,13 @@
     return tr.dir > 0 ? tr.headX() >= clearBy : tr.headX() <= clearBy;
   }
 
-  function drawSignals() {
-    var i;
+  /* Every signal on the ground: where it stands, its aspect, and dirX —
+     which way the trains it governs are travelling (+1 east, -1 west), so
+     the cab view can tell a signal it's approaching from one it's seeing
+     the back of. The map draws exactly these; the cab reads them. */
+  function signalStates() {
+    var out = [], i;
+    function sig(x, y, go, dirX) { out.push({ x: x, y: y, aspect: go ? 2 : 0, dirX: dirX }); }
     if (L.terminus) {
       // Both streams share the one throat here, so both signal heads
       // stand at the same x (xEastHome) — one for arrivals off the
@@ -742,30 +773,26 @@
       // way (G.throat.E.neg) — offset in y exactly like a through
       // station's two opposite home signals are.
       var arr = G.throat.E.pos, dep = G.throat.E.neg;
-      var arrGo = arr && arr.state === 'routed' && !pastSignal(arr, L.xEastHome);
-      var depGo = dep && dep.state === 'depart' && !pastSignal(dep, L.xEastHome);
-      drawSignal(L.xEastHome, L.mainB + 42, arrGo ? 2 : 0, true);
-      drawSignal(L.xEastHome, L.mainA - 42, depGo ? 2 : 0, true);
+      sig(L.xEastHome, L.mainB + 42, arr && arr.state === 'routed' && !pastSignal(arr, L.xEastHome), -1);
+      sig(L.xEastHome, L.mainA - 42, dep && dep.state === 'depart' && !pastSignal(dep, L.xEastHome), 1);
       for (i = 0; i < T.length; i++) {
         var ot = G.trackOwner[i];
         // Only a real departure gets a starter signal here — an arrival's
         // yard-bound shunt releases its platform the moment it commits
         // (see 'awaitYard' in updateTrain), well before it's this signal's
         // business, exactly like the yard shunt is nobody else's.
-        var goT = ot && ot.dir < 0 && ot.state === 'depart' && !pastSignal(ot, L.xThroatE - 30);
-        drawSignal(L.xThroatE - 30, T[i].y - 34, goT ? 2 : 0, true);
+        sig(L.xThroatE - 30, T[i].y - 34,
+            ot && ot.dir < 0 && ot.state === 'depart' && !pastSignal(ot, L.xThroatE - 30), 1);
       }
-      return;
+      return out;
     }
     // G.throat.W.pos only ever holds a dir>0 (west-entering) train, and
     // G.throat.E.neg only ever a dir<0 (east-entering) one — see slotOf —
     // so the home signal is exactly this train's clearance, not some other
     // road's, however many services are queued behind it at the signal.
     var wArr = G.throat.W.pos, eArr = G.throat.E.neg;
-    var wGo = wArr && wArr.state === 'routed' && !pastSignal(wArr, L.xWestHome);
-    var eGo = eArr && eArr.state === 'routed' && !pastSignal(eArr, L.xEastHome);
-    drawSignal(L.xWestHome, L.mainB + 42, wGo ? 2 : 0, true);
-    drawSignal(L.xEastHome, L.mainA - 42, eGo ? 2 : 0, true);
+    sig(L.xWestHome, L.mainB + 42, wArr && wArr.state === 'routed' && !pastSignal(wArr, L.xWestHome), 1);
+    sig(L.xEastHome, L.mainA - 42, eArr && eArr.state === 'routed' && !pastSignal(eArr, L.xEastHome), -1);
     for (i = 0; i < T.length; i++) {
       var o = G.trackOwner[i];
       // A stopping train clears this signal by actually departing; a
@@ -774,11 +801,14 @@
       // by itself clearance, or the signal would read green the moment
       // it's assigned a road, long before it's allowed to cross.
       var ready = o && (o.stops ? o.state === 'depart' : o.gateCleared);
-      var eastGo = ready && o.dir > 0 && !pastSignal(o, L.xThroatE - 30);
-      var westGo = ready && o.dir < 0 && !pastSignal(o, L.xThroatW + 30);
-      drawSignal(L.xThroatE - 30, T[i].y + 34, eastGo ? 2 : 0, true);
-      drawSignal(L.xThroatW + 30, T[i].y - 34, westGo ? 2 : 0, true);
+      sig(L.xThroatE - 30, T[i].y + 34, ready && o.dir > 0 && !pastSignal(o, L.xThroatE - 30), 1);
+      sig(L.xThroatW + 30, T[i].y - 34, ready && o.dir < 0 && !pastSignal(o, L.xThroatW + 30), -1);
     }
+    return out;
+  }
+
+  function drawSignals() {
+    signalStates().forEach(function (s) { drawSignal(s.x, s.y, s.aspect, true); });
   }
 
   function drawPeople() {
@@ -909,8 +939,14 @@
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = '#0a0e13';
     ctx.fillRect(0, 0, w, h);
+    ctx.save();
     ctx.translate(view.ox, view.oy);
     ctx.scale(view.scale, view.scale);
+    // Trains run on well off the map at both ends; with the map inset
+    // (cab view open) the margins would show them on bare stage. Restored
+    // at the end, or the clip would outlive the frame and fence off the
+    // next frame's clear.
+    ctx.beginPath(); ctx.rect(0, 0, RY.W, RY.H); ctx.clip();
 
     if (RY.sceneCanvas) ctx.drawImage(RY.sceneCanvas, 0, 0, RY.W, RY.H);
 
@@ -929,6 +965,7 @@
     for (i = 0; i < G.trains.length; i++) RY.drawTrainLights(ctx, G.trains[i], G.night);
     ctx.restore();
 
+    RY.cab.drawMarker(ctx);
     for (i = 0; i < G.trains.length; i++) drawLabel(G.trains[i]);
 
     if (G.state === 'paused') {
@@ -955,6 +992,7 @@
     }
     ctx.textAlign = 'right';
     ctx.fillText((L.terminus ? 'NETWORK & YARD' : 'FROM THE EAST') + '  ◀', RY.W - 12, L.mainA - 54);
+    ctx.restore();
     ctx.restore();
   }
 
@@ -1043,6 +1081,7 @@
 
   function renderHud() {
     document.getElementById('s-clock').textContent = fmtTime(G.gameT);
+    document.getElementById('s-elapsed').textContent = fmtPlayed(G.played);
     document.getElementById('s-score').textContent = Math.max(0, Math.round(G.score)).toLocaleString();
     document.getElementById('s-level').textContent = G.level;
     document.getElementById('s-punct').textContent =
@@ -1098,9 +1137,13 @@
     if (G.state !== 'running') return;
     var r = cv.getBoundingClientRect(), w = toWorld(e.clientX - r.left, e.clientY - r.top);
     var tr = hitTrain(w.x, w.y), ti = hitTrack(w.x, w.y);
-    if (tr && tr.state === 'approach') { select(tr); return; }
+    if (tr && tr.state === 'approach') { select(tr); RY.cab.follow(tr); return; }
     if (G.sel && ti >= 0) { assign(G.sel, ti); renderBoard(); renderKeys(); return; }
-    if (tr) { select(null); hint('<b>' + trName(tr) + '</b> is already on the move.'); return; }
+    if (tr) {
+      select(null); RY.cab.follow(tr);
+      hint('<b>' + trName(tr) + '</b> already has its road \u2014 riding in its cab.');
+      return;
+    }
     select(null);
   });
 
@@ -1128,6 +1171,7 @@
     for (i = 0; i < G.trains.length; i++) {
       if (G.trains[i].id === id) {
         select(G.trains[i].state === 'approach' ? G.trains[i] : null);
+        RY.cab.follow(G.trains[i]);
         return;
       }
     }
@@ -1161,12 +1205,20 @@
 
   root.addEventListener('keydown', function (e) {
     if (e.target === elVol) return;
+    if (quitAsked) {
+      // the question is the only thing on screen: answer it or go back
+      if (e.key === 'Enter') { e.preventDefault(); quitToMenu(); }
+      else if (e.key === 'Escape' || e.code === 'Space') { e.preventDefault(); cancelQuit(); }
+      return;
+    }
+    if (e.key === 'q' || e.key === 'Q') { askQuit(); return; }
     if (e.code === 'Space') {
       e.preventDefault();
       togglePause();
       return;
     }
     if (e.key === 'm' || e.key === 'M') { toggleMute(); return; }
+    if (e.key === 'c' || e.key === 'C') { RY.cab.toggle(); return; }
     if (e.key === 'Escape') { select(null); return; }
     var n = parseInt(e.key, 10);
     if (n >= 1 && n <= T.length && G.sel && G.state === 'running') {
@@ -1232,6 +1284,61 @@
     showMenu(false);
   });
 
+  /* ---------------- quitting mid-shift ---------------- */
+  /* Abandoning a shift throws it away, so it's asked first, with the play
+     held while the question is up. Going back leaves things exactly as
+     they were — still running, or still paused if it was already. */
+  var quitAsked = false, quitWasRunning = false;
+  var elQuit = document.getElementById('btn-quit');
+
+  function askQuit() {
+    if (quitAsked || (G.state !== 'running' && G.state !== 'paused')) return;
+    quitAsked = true;
+    quitWasRunning = G.state === 'running';
+    pauseGame();
+    elOverlay.innerHTML =
+      '<div class="card"><h1>QUIT <em>SHIFT?</em></h1>' +
+      '<p class="tag">This shift ends here and isn’t scored. You’ll be back at the main menu.</p>' +
+      '<div class="final">' +
+      '<div><label>Score so far</label><span>' + Math.max(0, Math.round(G.score)).toLocaleString() + '</span></div>' +
+      '<div><label>Trains dispatched</label><span>' + G.dispatched + '</span></div>' +
+      '<div><label>Time played</label><span>' + playedMinutes(G.played) + '</span></div>' +
+      '</div><div class="btnrow">' +
+      '<button id="btn-quit-no" class="ghost">KEEP PLAYING</button>' +
+      '<button id="btn-quit-yes">QUIT TO MAIN MENU</button></div>' +
+      '<div class="foot">Enter quit · Esc keep playing</div></div>';
+    elOverlay.classList.add('show');
+  }
+
+  function cancelQuit() {
+    if (!quitAsked) return;
+    quitAsked = false;
+    elOverlay.classList.remove('show');
+    if (quitWasRunning) resumeGame();
+  }
+
+  function quitToMenu() {
+    quitAsked = false;
+    G.state = 'menu';
+    RY.audio.suspend();
+    // clear the board, so the menu sits over an empty station rather than
+    // one frozen mid-shift
+    G.trains = []; G.sel = null; G.hoverTrain = null; G.hoverTrack = -1;
+    G.trackOwner = freshTrackOwner();
+    G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } };
+    RY.cab.reset();
+    elBanner.innerHTML = '';
+    hint('Select a train, then pick a road.');
+    renderBoard(); renderKeys();
+    showMenu(true);
+  }
+
+  elQuit.addEventListener('click', function () { elQuit.blur(); askQuit(); });
+  elOverlay.addEventListener('click', function (e) {
+    if (e.target.id === 'btn-quit-yes') quitToMenu();
+    else if (e.target.id === 'btn-quit-no') cancelQuit();
+  });
+
   /* ================= lifecycle ================= */
   function makePeople() {
     G.people = [];
@@ -1266,6 +1373,7 @@
       '<div class="final">' +
       '<div><label>Final score</label><span>' + Math.max(0, Math.round(G.score)).toLocaleString() + '</span></div>' +
       '<div><label>Trains dispatched</label><span>' + G.dispatched + '</span></div>' +
+      '<div><label>Time played</label><span>' + playedMinutes(G.played) + '</span></div>' +
       '<div><label>Shifts worked</label><span>' + G.level + '</span></div>' +
       '<div><label>Trains handled</label><span>' + G.arrivals + '</span></div>' +
       '<div><label>Punctuality</label><span>' + (G.events ? Math.round(G.onTime / G.events * 100) : 0) + '%</span></div>' +
@@ -1324,13 +1432,14 @@
     RY.audio.resume();
     var def = RY.applyStation(selectedStationId);
     RY.bakeScene();
+    RY.cab.reset();
     renderAkeys();
     document.querySelector('.bname').textContent = def.name.toUpperCase();
     document.title = 'Railyard Dispatcher \u2014 ' + def.name;
     G.state = 'running';
     G.trains = []; G.trackOwner = freshTrackOwner();
     G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } };
-    G.gameT = 360; G.elapsed = 0; G.level = 1; G.score = 0; G.lives = 3;
+    G.gameT = 360; G.elapsed = 0; G.played = 0; G.level = 1; G.score = 0; G.lives = 3;
     G.combo = 0; G.onTime = 0; G.events = 0; G.arrivals = 0;
     G.dispatched = 0; G.late = 0;
     G.spawnIn = 2.0; G.sel = null; G.night = 0; G.fullHouse = false;
@@ -1353,9 +1462,13 @@
   /* ================= main loop ================= */
   var last = 0;
   function frame(ts) {
-    var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
+    var raw = last ? Math.max(0, ts - last) / 1000 : 0, dt = Math.min(0.05, raw);
     last = ts;
     if (G.state === 'running') {
+      // The Elapsed readout is wall-clock time, so a slow frame still counts
+      // in full, unlike the sim's clamped step; a frame gap of over a second
+      // means the page was starved, and a hidden tab pauses the shift anyway.
+      G.played += Math.min(1, raw);
       update(dt);
       if (ts - G.lastBoard > 220) { G.lastBoard = ts; renderBoard(); renderKeys(); }
       renderHud();
@@ -1363,6 +1476,7 @@
       RY.audio.silence();
     }
     draw();
+    RY.cab.draw(G, signalStates());
     requestAnimationFrame(frame);
   }
 

@@ -19,6 +19,7 @@
     </div>
     <div class="stats">
       <div class="stat"><label>Station Clock</label><span id="s-clock">06:00</span></div>
+      <div class="stat" title="Real time on shift, not counting pauses"><label>Elapsed</label><span id="s-elapsed">0:00</span></div>
       <div class="stat"><label>Score</label><span id="s-score">0</span></div>
       <div class="stat"><label>Shift</label><span id="s-level">1</span></div>
       <div class="stat"><label>Punctuality</label><span id="s-punct">—</span></div>
@@ -34,11 +35,23 @@
       </div>
       <button id="btn-pause" title="Pause (Space)">⏸</button>
       <button id="btn-help" title="How to play">?</button>
+      <button id="btn-quit" class="wide" title="Quit to the main menu (Q)">QUIT</button>
     </div>
   </header>
 
   <main id="stage">
     <canvas id="cv"></canvas>
+    <div id="cab">
+      <div class="cabhead">
+        <span class="cabtitle">Cab view</span>
+        <span id="cabname"></span>
+        <button id="cabtoggle" type="button">▾</button>
+      </div>
+      <div class="cabwrap">
+        <canvas id="cabcv"></canvas>
+        <div id="cabhint">Click any train to ride in its cab</div>
+      </div>
+    </div>
     <div id="toasts"></div>
     <div id="banner"></div>
   </main>
@@ -72,7 +85,7 @@
         <div><b>6.</b> Three strikes — a service cancelled through excessive delay — and your shift is over. Traffic builds every shift.</div>
       </div>
       <button id="btn-start">BEGIN SHIFT</button>
-      <div class="foot">Space pause · number keys assign road · Esc deselect · M mute</div>
+      <div class="foot">Space pause · number keys assign road · Esc deselect · M mute · C cab view · Q quit</div>
     </div>
   </div>
 
@@ -81,6 +94,7 @@
 <script src="js/geom.js"></script>
 <script src="js/scene.js"></script>
 <script src="js/train.js"></script>
+<script src="js/cab.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>
