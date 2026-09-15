@@ -445,19 +445,22 @@
     line3(o, [hu, -9, head], [hu, 9, head], col([34, 36, 40], k, 1), 1.1);
     line3(o, [hu + 1.6, -8, head], [hu + 1.6, 8, head], col([34, 36, 40], k, 1), 0.8);
   }
-  /* Head- or tail-lamps on an end face. */
-  function endLamps(o, u, hw, rgb, k, top, h) {
-    var spots = [[-(hw - 5.5), 11.5], [hw - 5.5, 11.5]];
-    if (top) spots.push([0, h - 9]);
-    spots.forEach(function (q) {
+  /* The lamps on an end face, from the table the map draws them from
+     (RY.LAMPS, train.js): at the head of the train all white, at its tail
+     the red-capable ones red, and dark anywhere else. */
+  var L_WHITE = [255, 246, 214], L_RED = [255, 62, 44], L_OFF = [196, 202, 208];
+  function endLamps(o, u, set, mode, k) {
+    set.forEach(function (q) {
       var P = Vf(o, u, q[0], q[1]);
       if (P.f < NEAR) return;
-      var x = sx(P), y = sy(P), r = Math.max(0.8, 1.6 * focal / P.f);
+      var rgb = mode === 'head' ? L_WHITE : mode === 'tail' && q[3] ? L_RED : L_OFF, on = rgb !== L_OFF;
+      var x = sx(P), y = sy(P), r = Math.max(0.8, q[2] * 0.6 * focal / P.f);
       ctx.fillStyle = 'rgba(' + rgb.join(',') + ',' + (1 - k * 0.7) + ')';
       ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
-      if (night > 0.05) glow(x, y, r * 5, rgb, 0.5 * night * (1 - k));
+      if (on && night > 0.05) glow(x, y, r * 5, rgb, 0.5 * night * (1 - k));
     });
   }
+  function lampMode(head, tail) { return head ? 'head' : tail ? 'tail' : ''; }
   function windscreen(o, u, dir, hw, zb, zt, rake, twoPane, k, lit) {
     var ub = u - dir * 0.7, ut = u - dir * rake, style = glassStyle(k, lit + 0.15);
     if (twoPane) {
@@ -607,19 +610,8 @@
         onEnd(o, tip + 0.06, -6.2, 6.2, 21.2, 24.2, col(D_DARK, k, 1));               // number board
         onEnd(o, tip + 0.07, -5.2, 5.2, 21.8, 23.6, col([226, 230, 234], k, 1));
         onEnd(o, tip + 0.06, -8.4, 8.4, 11.5, 13.2, col(D_DARK, k, 1));
-        noseLamps(tip + 0.08, [[-3.4, 18.4], [3.4, 18.4]], isFront);
+        endLamps(o, tip + 0.08, RY.LAMPS.dloco.slice(0, 2), lampMode(isFront, false), k);   // twin headlights
       }
-    }
-    function noseLamps(u, spots, on, tail) {
-      var rgb = on ? (tail ? [255, 62, 44] : [255, 246, 214]) : [196, 202, 208];
-      spots.forEach(function (q) {
-        var P = Vf(o, u, q[0], q[1]);
-        if (P.f < NEAR) return;
-        var x = sx(P), y = sy(P), r = Math.max(0.8, 1.55 * focal / P.f);
-        ctx.fillStyle = 'rgba(' + rgb.join(',') + ',' + (1 - k * 0.7) + ')';
-        ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
-        if (on && night > 0.05) glow(x, y, r * 5, rgb, 0.5 * night * (1 - k));
-      });
     }
 
     // underneath first — the trucks and the tank are all below the deck
@@ -648,10 +640,10 @@
       .forEach(function (part) { part[0](); });
     if (eye.u > 0) {
       pilot();
-      noseLamps(tip + 2.3, [[-9, 7.2], [9, 7.2]], isFront);                          // ditch lights
+      endLamps(o, tip + 2.3, RY.LAMPS.dloco.slice(2), lampMode(isFront, false), k);      // ditch lights
     } else {
       buffersAt(o, -hl, -1, k);
-      if (eye.u < hood0) noseLamps(hood0 - 0.08, [[-5.5, 27], [5.5, 27]], isRear, true);   // tail lamps, on the hood's back end
+      if (eye.u < hood0) endLamps(o, hood0 - 0.08, RY.LAMPS.dlocoBack, lampMode(false, isRear), k);   // tail lamps, on the hood's back end
     }
   }
 
@@ -708,14 +700,14 @@
       if (cabF && eye.u > hl - 9) {
         windscreen(o, hl, 1, hw, 19.5, 31, 8.5, false, k, lit);
         onEnd(o, hl + 0.05, -2.8, 2.8, 7, 10.5, col([30, 32, 36], k, 1));     // coupler
-        endLamps(o, hl + 0.06, hw - 2, isFront ? [255, 246, 214] : [200, 206, 212], k, false, h);
+        endLamps(o, hl + 0.06, RY.LAMPS[kind], lampMode(isFront, false), k);
       }
       if (cabR && eye.u < -hl + 9) {
         windscreen(o, -hl, -1, hw, 19.5, 31, 8.5, false, k, lit);
         onEnd(o, -hl - 0.05, -2.8, 2.8, 7, 10.5, col([30, 32, 36], k, 1));
-        endLamps(o, -hl - 0.06, hw - 2, isRear ? [255, 62, 44] : [200, 206, 212], k, false, h);
+        endLamps(o, -hl - 0.06, RY.LAMPS[kind], lampMode(false, isRear), k);
       }
-      if (!cabR && isRear && eye.u < -hl) endLamps(o, -hl - 0.06, hw, [255, 62, 44], k, false, h);
+      if (!cabR && isRear && eye.u < -hl) endLamps(o, -hl - 0.06, RY.LAMPS[kind], 'tail', k);
       // and whatever sticks out of the near end, in front of it
       if (eye.u >= 0 && gangF) bellowsAt(o, hl, 1, k);
       if (eye.u <= 0 && gangR) bellowsAt(o, -hl, -1, k);
@@ -748,11 +740,11 @@
       }
       if (eye.u > hl - 7) {
         windscreen(o, hl, 1, hw, 21.5, 32, 6, true, k, lit);
-        endLamps(o, hl + 0.06, hw, isFront ? [255, 246, 214] : [200, 206, 212], k, true, h);
+        endLamps(o, hl + 0.06, RY.LAMPS.eloco, lampMode(isFront, false), k);
       }
       if (eye.u < -hl + 7) {
         windscreen(o, -hl, -1, hw, 21.5, 32, 6, true, k, lit);
-        endLamps(o, -hl - 0.06, hw, isRear ? [255, 62, 44] : [200, 206, 212], k, true, h);
+        endLamps(o, -hl - 0.06, RY.LAMPS.eloco, lampMode(false, isRear), k);
       }
       if (eye.u >= 0) buffersAt(o, hl, 1, k); else buffersAt(o, -hl, -1, k);
       pantograph(o, mr1 - 22, h, false, k);                 // leading one down,
@@ -799,7 +791,7 @@
       if (eye.u > 0) { box(0, c0); box(1, c1); } else { box(1, c1); box(0, c0); }
     }
     if (eye.u >= 0) buffersAt(o, hl, 1, k); else buffersAt(o, -hl, -1, k);
-    if (isRear && eye.u < -hl) endLamps(o, -hl - 3.3, hw, [255, 62, 44], k, false, 28);
+    if (isRear && eye.u < -hl) endLamps(o, -hl - 3.3, RY.LAMPS.wagon, 'tail', k);
   }
   function glow(x, y, r, rgb, a) {
     var g = ctx.createRadialGradient(x, y, 0, x, y, r);
@@ -942,20 +934,50 @@
                 depart: 'DEPARTING', toPlatform: 'SHUNTING', awaitYard: 'HELD', toYard: 'SHUNTING',
                 parked: 'STABLED' };
 
-  /* A headlamp beam on the line ahead, once the light goes. */
-  function headlamp() {
+  /* Once the light goes, every train's headlamp beam and tail glow on the
+     ground — the very shapes the map lays down for it (RY.drawTrainLights,
+     train.js): a cone off the nose, 28 across there and opening to 0.64 of
+     its length, which runs 130 plus a little for speed; and a red pool 26
+     round the tail. Stood up in perspective they're cut into bands, each lit
+     as the map's gradient is at that distance, and added on as the map does. */
+  var BEAM_STOPS = [[0, [255, 244, 206]], [0.25, [255, 236, 180]], [1, [255, 230, 160]]];
+  function groundGlow(pts, rgb, a) {
+    if (a < 0.004) return;
+    var ps = pts.map(function (q) { return P3(toCam(q[0], q[1]), 0.3); });
+    fillPoly(ps, 'rgba(' + rgb.join(',') + ',' + a.toFixed(3) + ')');
+  }
+  function groundLights(trains) {
     if (night < 0.05) return;
-    var a = P3({ f: 18, l: 0 }, 0), b = P3({ f: 260, l: 0 }, 0);
-    var x0 = sx(a), y0 = sy(a), y1 = sy(b);
-    var g = ctx.createLinearGradient(0, y0, 0, y1);
-    g.addColorStop(0, 'rgba(255,240,200,' + (0.34 * night) + ')');
-    g.addColorStop(1, 'rgba(255,240,200,0)');
+    var a0 = 0.55 * night + 0.12, a1 = 0.16 * night;
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.moveTo(x0 - 26 / 18 * focal, y0); ctx.lineTo(x0 + 26 / 18 * focal, y0);
-    ctx.lineTo(sx(P3({ f: 260, l: 40 }, 0)), y1); ctx.lineTo(sx(P3({ f: 260, l: -40 }, 0)), y1);
-    ctx.closePath(); ctx.fill();
+    trains.forEach(function (tr) {
+      var p = RY.pathAt(tr.path, tr.s), r = 130 + tr.v * 0.55, N = 14, i, j, d0, d1, w0, w1, t, a, rgb, fk;
+      if (p.x < -220 || p.x > RY.W + 220 || !near(p.x, p.y, r)) return;
+      var ca = Math.cos(p.a), sa = Math.sin(p.a);
+      function at(d, w) { return [p.x + ca * d - sa * w, p.y + sa * d + ca * w]; }
+      for (i = 0; i < N; i++) {
+        d0 = r * i / N; d1 = r * (i + 1) / N;
+        w0 = 14 + (0.32 * r - 14) * i / N; w1 = 14 + (0.32 * r - 14) * (i + 1) / N;
+        t = Math.max(0, ((d0 + d1) / 2 - 6) / r);
+        a = t < 0.25 ? a0 + (a1 - a0) * t / 0.25 : a1 * (1 - (t - 0.25) / 0.75);
+        j = t < 0.25 ? 0 : 1;
+        rgb = BEAM_STOPS[j][1].map(function (v, n) {
+          var lo = BEAM_STOPS[j], hi = BEAM_STOPS[j + 1];
+          return Math.round(v + (hi[1][n] - v) * (t - lo[0]) / (hi[0] - lo[0]));
+        });
+        fk = fogK(dist(p.x + ca * (d0 + d1) / 2, p.y + sa * (d0 + d1) / 2));
+        groundGlow([at(d0, -w0), at(d1, -w1), at(d1, w1), at(d0, w0)], rgb, a * (1 - fk));
+      }
+      // the tail: a pool of red, stacked discs so it fades to its edge
+      var q = RY.pathAt(tr.path, Math.max(0, tr.s - tr.len)), K = 5, ring;
+      if (!near(q.x, q.y, 26)) return;
+      fk = fogK(dist(q.x, q.y));
+      for (i = 1; i <= K; i++) {
+        ring = [];
+        for (j = 0; j < 16; j++) ring.push([q.x + Math.cos(j * 0.3927) * 26 * i / K, q.y + Math.sin(j * 0.3927) * 26 * i / K]);
+        groundGlow(ring, [255, 66, 46], 0.5 * night / K * (1 - fk));
+      }
+    });
     ctx.restore();
   }
 
@@ -1067,7 +1089,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     sky();
     groundLayer(world);
-    headlamp();
+    groundLights(G.trains);
 
     // everything that stands up, painted far to near
     var items = [], i, j, it, tr;

@@ -442,8 +442,33 @@
     }
   }
 
-  /* A driving end: raked screen with wipers, lamps, coupler cover. */
-  function cabEnd(ctx, BL, HW, cfg, front, lit, warning) {
+  /* The lamps on each kind of driving end, shared with the cab view (cab.js)
+     so a train carries the same lamps whether you're looking down on it or
+     at it: [lateral offset, height above the rail, radius, shows red]. At
+     the head of a train every lamp shows white; at its tail the ones that
+     can show red do; anywhere else they're dark. The map draws them from
+     above, where the height doesn't show. */
+  RY.LAMPS = {
+    emu:   [[-10.6, 11.5, 2.7, 1], [10.6, 11.5, 2.7, 1], [0, 16.5, 2.1, 0]],       // headlamps, and a marker under the screen
+    eloco: [[-12.1, 11.5, 2.7, 1], [12.1, 11.5, 2.7, 1], [0, 31, 2.1, 0]],         // headlamps, and one over the screen
+    dloco: [[-3.4, 18.4, 2.2, 0], [3.4, 18.4, 2.2, 0], [-9, 7.2, 2.2, 0], [9, 7.2, 2.2, 0]],   // twin headlights on the nose, ditch lights on the pilot
+    dlocoBack: [[-5.5, 27, 2.2, 1], [5.5, 27, 2.2, 1]],                           // on the hood's back end
+    wagon: [[-10.5, 11.5, 2.2, 1], [10.5, 11.5, 2.2, 1]]                          // tail lamps on the last wagon
+  };
+  RY.LAMPS.coach = RY.LAMPS.emu;
+  var LAMP_WHITE = '#fff7d6', LAMP_RED = '#e0402e', LAMP_OFF = '#b9c0c8';
+
+  /* A set of lamps on an end at x, from above. mode: 'head', 'tail' or off. */
+  function lampsAt(ctx, x, set, mode) {
+    set.forEach(function (q) {
+      ctx.fillStyle = mode === 'head' ? LAMP_WHITE : mode === 'tail' && q[3] ? LAMP_RED : LAMP_OFF;
+      ctx.beginPath(); ctx.arc(x, q[0], q[2], 0, 6.2832); ctx.fill();
+    });
+  }
+
+  /* A driving end: raked screen with wipers, lamps, coupler cover. `lit`
+     says this end is the head (front) or the tail (rear) of the train. */
+  function cabEnd(ctx, BL, HW, cfg, front, lit, warning, lamps) {
     var nose = front ? 1 : -1, xe = nose * (BL / 2), i;
 
     ctx.beginPath();
@@ -486,20 +511,7 @@
       ctx.stroke();
     }
 
-    var lampX = xe - nose * 2.4;
-    if (front) {
-      ctx.fillStyle = lit ? '#fff7d6' : '#e2e7ec';
-      for (i = -1; i <= 1; i += 2) {
-        ctx.beginPath(); ctx.arc(lampX, i * (HW - 6.4), 2.7, 0, 6.2832); ctx.fill();
-      }
-      ctx.fillStyle = '#cbd0d5';
-      ctx.beginPath(); ctx.arc(lampX, 0, 2.1, 0, 6.2832); ctx.fill();
-    } else {
-      ctx.fillStyle = '#c8382c';
-      for (i = -1; i <= 1; i += 2) {
-        ctx.beginPath(); ctx.arc(lampX, i * (HW - 6.4), 2.5, 0, 6.2832); ctx.fill();
-      }
-    }
+    lampsAt(ctx, xe - nose * 2.4, lamps, lit ? (front ? 'head' : 'tail') : '');
     ctx.fillStyle = '#20252c';
     ctx.fillRect(xe - nose * 1, -3.2, nose * 5.5, 6.4);
   }
@@ -564,8 +576,8 @@
 
     specular(ctx, BL, RH);
 
-    if (vh.first) cabEnd(ctx, BL, HW, cfg, true, true, false);
-    if (vh.last)  cabEnd(ctx, BL, HW, cfg, false, false, false);
+    if (vh.first) cabEnd(ctx, BL, HW, cfg, true, true, false, RY.LAMPS.emu);
+    if (vh.last)  cabEnd(ctx, BL, HW, cfg, false, true, false, RY.LAMPS.emu);    // the train's tail
     if (!vh.first) gangway(ctx, -BL / 2 - 0.5, -1);
     if (!vh.last)  gangway(ctx,  BL / 2 + 0.5,  1);
   }
@@ -602,7 +614,7 @@
     specular(ctx, BL, RH);
 
     if (vh.last) {
-      cabEnd(ctx, BL, HW, cfg, false, false, false);
+      cabEnd(ctx, BL, HW, cfg, false, true, false, RY.LAMPS.coach);   // the train's tail
       buffers(ctx, BL / 2 + 0.5, 1);
     } else {
       gangway(ctx, BL / 2 + 0.5, 1);
@@ -663,8 +675,8 @@
 
     specular(ctx, BL, RH);
 
-    cabEnd(ctx, BL, HW, cfg, true,  true,  true);
-    cabEnd(ctx, BL, HW, cfg, false, false, true);
+    cabEnd(ctx, BL, HW, cfg, true,  vh.first, true, RY.LAMPS.eloco);
+    cabEnd(ctx, BL, HW, cfg, false, vh.last,  true, RY.LAMPS.eloco);   // coupled to its train: dark
     buffers(ctx, -BL / 2 - 0.5, -1);
   }
 
@@ -730,7 +742,7 @@
     ctx.fillStyle = 'rgba(255,255,255,.14)';
     ctx.fillRect(BL * 0.12, -HW + 1.4, BL * 0.38 - 1, 1.6);
 
-    cabEnd(ctx, BL, HW, { body: '#c9a227' }, true, true, true);
+    cabEnd(ctx, BL, HW, { body: '#c9a227' }, true, vh.first, true, RY.LAMPS.dloco);
     buffers(ctx, -BL / 2 - 0.5, -1);
 
     // handrails
@@ -823,6 +835,7 @@
     }
     buffers(ctx, -BL / 2 - 0.5, -1);
     buffers(ctx,  BL / 2 + 0.5,  1);
+    if (vh.last) lampsAt(ctx, -BL / 2 - 1.5, RY.LAMPS.wagon, 'tail');
   }
 
   var RENDER = {

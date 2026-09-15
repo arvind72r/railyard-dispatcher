@@ -301,12 +301,24 @@ does on the map.
   point the map draws, a snowplough pilot and ditch lights below it; and
   hoppers, tanks and container flats loaded exactly as on
   the map, down to the containers' colours. All of them run on bogies, with
-  buffers, couplers and gangways where they belong, and head- and tail-lamps
-  that light up at dusk.
+  buffers, couplers and gangways where they belong.
+- **The lamps are the map's lamps.** Both views draw them from one table
+  (`RY.LAMPS` in `js/train.js`): a multiple unit's two headlamps and the
+  marker between them, an electric locomotive's two and the one over its
+  screen, the diesel's twin nose lights and ditch lights, tail lamps on
+  whatever is last. White at the head of a train, red at its tail, dark
+  in between.
 - **The console** along the bottom gives your speed, a repeater of the next
   signal ahead, the road you're booked into and what the train is doing.
-- **It gets dark with the shift**, with the headlamp picking out the line
-  ahead.
+- **It gets dark with the shift**, and every train's headlamp beam and red
+  tail glow are laid on the ground exactly as the map lays them: the same
+  cone off the nose, lengthening with speed, and the same pool of red.
+
+Trains held at a red signal — at the home signal, or a non-stop or freight
+service waiting for the far throat — draw up 80 short of it rather than with
+the nose at the post, so the signal they're waiting on is in the cab's
+picture. At the far throat that's cut back if need be so a long train's tail
+is never left in the throat it has just come through.
 
 While it's open the map is drawn at 86% and sat on the bottom of the
 stage, so the spare height gathers in one band across the top instead of

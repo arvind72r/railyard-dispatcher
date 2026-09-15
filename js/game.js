@@ -9,6 +9,11 @@
   var LEVEL_SECS = 68;          // real seconds per shift
   var LATE_MAX   = 8;           // minutes late before a service is cancelled
   var LATE_AFTER = 0.75;        // minutes past booked before one reads as late
+  /* How far short of a red signal a train draws up. Stopped with its nose
+     at the post, the driver's already past the head — it stands 34-42 to
+     the side and well above eye level — so it's out of the cab view's
+     picture; this far back it's squarely in it. */
+  var SIGNAL_SIGHT = 80;
   var MINS_PER_SEC = 1;         // station clock runs a minute a second
 
   var cv  = document.getElementById('cv');
@@ -392,7 +397,7 @@
       for (var i = 0; i < list.length; i++) {
         var t = list[i];
         if (t.state !== 'approach') continue;
-        var tgt = t.sHome;
+        var tgt = t.sHome - SIGNAL_SIGHT;
         if (i > 0) tgt = Math.min(tgt, list[i - 1].s - list[i - 1].len - 38);
         t.targetS = Math.max(0, tgt);
       }
@@ -486,9 +491,13 @@
           // reconsidered — the lock later releasing far down the line
           // (routine, once the train is long past here) must not be
           // mistaken for a fresh arrival at the gate.
-          if (!tr.gateCleared && tr.s > tr.sFarGate - 160) {
+          if (!tr.gateCleared && tr.s > tr.sFarGate - SIGNAL_SIGHT - 160) {
             if (throatConflict(farSide, tr, tr.trackId)) {
-              tr.targetS = tr.sFarGate;             // hold clear of the far ladder
+              // hold clear of the far ladder, and short of the starter so
+              // it's in sight — but never so far short that the tail is
+              // left in the entry throat, still holding it (updateResources)
+              var clearS = RY.sAtX(tr.path, tr.dir > 0 ? L.xThroatW + 12 : L.xThroatE - 12);
+              tr.targetS = tr.sFarGate - Math.max(0, Math.min(SIGNAL_SIGHT, tr.sFarGate - tr.len - clearS));
             } else {
               G.throat[farSide][slotOf(tr.dir)] = tr; tr.holdsThroat[farSide] = true;
               tr.targetS = Infinity;                 // clear — run straight through
