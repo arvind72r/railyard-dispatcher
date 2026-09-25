@@ -1208,6 +1208,27 @@
      map's placement and the station. */
   var fitKey = '';
   var CLEAR = 16;   // half a train and some air
+  var stageEl = document.getElementById('stage'), dockEl = document.getElementById('cabdock'), docked = false;
+
+  /* On a stage too short for a window over the map (a phone on its side),
+     the cab view docks at the top of the side panel instead, and the map
+     keeps all of the stage (game.js asks overlays()). */
+  function wantDock() {
+    var w = stageEl.clientWidth, h = stageEl.clientHeight;
+    return !!dockEl && ((h < 420 && w > h * 1.25) || w < 300);
+  }
+  function place() {
+    if (docked) {
+      if (host.parentNode !== dockEl) dockEl.appendChild(host);
+      host.classList.remove('tight');
+      host.style.width = host.style.height = '';
+    } else if (host.parentNode !== stageEl) {
+      stageEl.insertBefore(host, document.getElementById('toasts'));
+    }
+    host.classList.toggle('docked', docked);
+    W = 0;
+    root.dispatchEvent(new Event('resize'));   // the map takes the stage back, or makes room again
+  }
 
   function keepOut(sigs) {
     var out = [], L = RY.LAY;
@@ -1240,8 +1261,10 @@
   }
 
   function fit(sigs) {
-    var v = RY.view, stage = host.parentNode;
+    var v = RY.view, stage = stageEl;
     if (!v || !v.scale) return;
+    if (wantDock() !== docked) { docked = !docked; fitKey = ''; place(); }
+    if (docked) return;                                          // sized by the panel
     var SW = stage.clientWidth, SH = stage.clientHeight;
     var key = SW + 'x' + SH + ':' + v.scale + ',' + v.ox + ',' + v.oy + ':' + RY.station.id;
     if (key === fitKey) return;
@@ -1373,6 +1396,7 @@
     target: function () { return target; },
     toggle: function () { setShown(!shown); },
     shown: function () { return shown; },
+    overlays: function () { return shown && !docked; },
     reset: function () { follow(null); worldKey = ''; fitKey = ''; },
     draw: draw,
     drawMarker: drawMarker

@@ -9,9 +9,11 @@ body{
   background:var(--bg); color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   overflow:hidden; user-select:none; -webkit-font-smoothing:antialiased;
+  touch-action:manipulation;               /* taps are taps: no double-tap zoom delay */
+  -webkit-tap-highlight-color:transparent;
 }
 #app{
-  height:100%; display:grid;
+  height:100%; height:100dvh; display:grid;
   grid-template-columns:1fr 310px;
   grid-template-rows:56px 1fr;
   grid-template-areas:"top top" "stage panel";
@@ -216,11 +218,15 @@ body{
 #hint b{color:var(--amber)}
 
 /* ---------- overlay ---------- */
+/* Scrolls when the card is taller than the screen (a phone, a landscape
+   tablet): margin:auto centres it when it fits and pins it to the top when
+   it doesn't, so Begin Shift is always reachable. */
 #overlay{
   position:fixed;inset:0;background:rgba(6,9,13,.9);backdrop-filter:blur(6px);
-  display:none;place-items:center;z-index:50;
+  display:none;z-index:50;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;
 }
-#overlay.show{display:grid}
+#overlay.show{display:flex}
+#overlay .card{margin:auto}
 .card{
   width:min(660px,92vw);background:linear-gradient(170deg,#18202c,#10161e);
   border:1px solid #2c3644;border-radius:16px;padding:30px 34px;
@@ -265,4 +271,70 @@ kbd{
 
 @media (max-width:1100px){
   #app{grid-template-columns:1fr 250px}
+}
+
+/* ---------- small screens ---------- */
+/* The cab view docked in the panel, where the stage has no room for it
+   (cab.js decides; see dockedNow). */
+#cabdock:empty{display:none}
+#cabdock{padding:8px 8px 0;flex:none}
+#cab.docked{position:static;width:auto!important;height:auto!important;box-shadow:none}
+#cab.docked .cabwrap{flex:none;aspect-ratio:2/1}
+
+/* Portrait (a phone, a tablet held upright): stack the bar, the station and
+   the panel. The station takes the full width with the cab view in a band
+   across its top, and the panel gets the rest of the height. */
+@media (orientation:portrait) and (max-width:900px){
+  #app{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr);
+    grid-template-areas:"top" "stage" "panel"}
+  #stage{height:min(calc(106.25vw + 40px), calc(100dvh - 340px))}
+  #stage:has(#cab.off){height:56.25vw}
+  #panel{border-left:none;border-top:1px solid var(--line)}
+  #topbar{flex-wrap:wrap;gap:6px 10px;padding:6px 10px}
+  .brand{min-width:0}
+  .ctrls{margin-left:auto}
+  .stats{order:3;flex-basis:100%;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px 6px}
+  .stat span{font-size:12px}
+  .stat label{font-size:8px;letter-spacing:.08em}
+  #vol{display:none}
+  .vol{padding:0 3px}
+}
+/* An upright tablet has the width to put the register and the road
+   buttons side by side under the station, rather than one above the other. */
+@media (orientation:portrait) and (max-width:900px) and (min-width:600px){
+  #panel{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto minmax(0,1fr)}
+  #cabdock{grid-column:1 / -1}
+  #panel h2{grid-column:1}
+  #board{grid-column:1;min-height:0}
+  #assign{grid-column:2;grid-row:2 / 4;border-top:none;border-left:1px solid var(--line)}
+}
+/* A phone on its side: every pixel of height counts. A slim bar, a
+   narrower panel, and the cab view docked at the top of the panel. */
+@media (orientation:landscape) and (max-height:520px){
+  #app{grid-template-rows:40px 1fr;grid-template-columns:1fr 210px}
+  #topbar{gap:8px;padding:0 8px}
+  .brand{min-width:0}
+  .logo{width:26px;height:26px;font-size:15px}
+  .stats{gap:6px}
+  .stat span{font-size:12px}
+  .stat label{font-size:7px;letter-spacing:.06em}
+  .ctrls{gap:5px}
+  .ctrls button{width:28px;height:28px;font-size:13px}
+  .ctrls button.wide{padding:0 7px;font-size:10px}
+  .vol{height:28px;padding:0 3px}
+  #vol{display:none}
+  #panel h2{padding:7px 10px 6px}
+  #board{padding:6px}
+  .row{padding:5px 7px;margin-bottom:5px}
+  #assign{padding:6px 8px}
+  .ahead2,#hint{display:none}
+  .akey{padding:3px 1px}
+}
+/* Narrow menus: one column of stations, tighter card. */
+@media (max-width:560px){
+  .card{padding:20px 18px}
+  .card h1{font-size:24px;letter-spacing:.12em}
+  .stations{grid-template-columns:1fr}
+  .rules div{font-size:12.5px}
+  .final{gap:16px}
 }

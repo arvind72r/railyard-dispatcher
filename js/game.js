@@ -58,14 +58,20 @@
     var dpr = Math.min(2, root.devicePixelRatio || 1);
     var w = stage.clientWidth, h = stage.clientHeight;
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-    var cab = RY.cab && RY.cab.shown();
-    var sc = Math.min(w / RY.W, h / RY.H) * (cab ? MAP_ZOOM_CAB : 1);
+    var cab = RY.cab && RY.cab.overlays();
+    var sc = Math.min(w / RY.W, h / RY.H);
+    // Only shrink the map when the stage hasn't already a band to spare
+    // above it — in portrait, the stage is laid out with room for the cab.
+    if (cab && h - RY.H * sc < 0.3 * h) sc *= MAP_ZOOM_CAB;
     view.scale = sc;
     view.ox = (w - RY.W * sc) / 2;
     view.oy = cab ? h - RY.H * sc : (h - RY.H * sc) / 2;
     view.dpr = dpr;
   }
   root.addEventListener('resize', resize);
+  // the stage also changes size without the window doing so: the portrait
+  // layout, the cab view shown or hidden, a phone rotated
+  if (root.ResizeObserver) new ResizeObserver(function () { resize(); }).observe(stage);
 
   function toScreen(x, y) {
     return { x: view.ox + x * view.scale, y: view.oy + y * view.scale };
@@ -1101,7 +1107,8 @@
 
   /* ================= input ================= */
   function hitTrain(wx, wy) {
-    var i, tr, s, p, best = null, bd = 26;
+    // at least a fingertip's worth on screen, however small the map is drawn
+    var i, tr, s, p, best = null, bd = Math.max(26, 20 / view.scale);
     for (i = 0; i < G.trains.length; i++) {
       tr = G.trains[i];
       for (s = Math.max(0, tr.s - tr.len); s <= tr.s; s += 14) {
