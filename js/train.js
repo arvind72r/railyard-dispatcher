@@ -66,16 +66,19 @@
 
   /* =================== the train =================== */
   function Train(typeKey, dir, gameT) {
-    var c = RY.TYPES[typeKey], i, len, kind, off = 0;
+    var c = RY.serviceCfg(typeKey), i, len, kind, off = 0;
+    var og = (RY.station && RY.station.origins) || { west: ORIGINS_W, east: ORIGINS_E };
     this.id = uid++;
     this.type = typeKey;
     this.cfg = c;
     this.dir = dir;                                   // +1 eastbound, -1 westbound
     this.cars = c.cars;
     this.stops = c.stops;
-    this.code = c.prefix + (100 + ((Math.random() * 800) | 0));
-    this.origin = (dir > 0 ? ORIGINS_W : ORIGINS_E)[(Math.random() * 5) | 0];
-    this.dest   = (dir > 0 ? ORIGINS_E : ORIGINS_W)[(Math.random() * 5) | 0];
+    // a train number where the station's railway numbers them, a code otherwise
+    this.code = c.numbers ? String(c.numbers[0] + ((Math.random() * (c.numbers[1] - c.numbers[0] + 1)) | 0))
+                          : (c.codePrefix || c.prefix) + (100 + ((Math.random() * 800) | 0));
+    this.origin = (dir > 0 ? og.west : og.east)[(Math.random() * 5) | 0];
+    this.dest   = (dir > 0 ? og.east : og.west)[(Math.random() * 5) | 0];
     this.seed = (Math.random() * 1e9) | 0;
 
     /* Build the consist, front to back. */
@@ -633,7 +636,11 @@
      driving ends, and a machine room between them under a raised roof
      with one pantograph up and the trailing one down. */
   function drawElectricLoco(ctx, tr, vh) {
-    var cfg = tr.cfg, BL = vh.len - 8, HW = 18.5, RH = HW - 6, x;
+    // a locomotive in its own livery, where the railway paints them apart
+    // from their trains (Indian Railways, say), has ends to match rather
+    // than warning yellow
+    var cfg = tr.cfg.loco || tr.cfg, warn = !tr.cfg.loco;
+    var BL = vh.len - 8, HW = 18.5, RH = HW - 6, x;
     var mr0 = -BL / 2 + 25, mr1 = BL / 2 - 27;      // machine room extent
 
     solebar(ctx, BL, HW);
@@ -682,17 +689,20 @@
 
     specular(ctx, BL, RH);
 
-    cabEnd(ctx, BL, HW, cfg, true,  vh.first, true, RY.LAMPS.eloco);
-    cabEnd(ctx, BL, HW, cfg, false, vh.last,  true, RY.LAMPS.eloco);   // coupled to its train: dark
+    cabEnd(ctx, BL, HW, cfg, true,  vh.first, warn, RY.LAMPS.eloco);
+    cabEnd(ctx, BL, HW, cfg, false, vh.last,  warn, RY.LAMPS.eloco);   // coupled to its train: dark
     buffers(ctx, -BL / 2 - 0.5, -1);
   }
 
   /* Diesel locomotive: long hood, radiator fans, exhaust, walkways. */
   function drawDieselLoco(ctx, tr, vh) {
     var BL = vh.len - 8, HW = 18.5, RH = HW - 5.5, x;
+    // grey hood and a warning-yellow cab, unless the railway has its own livery
+    var lv = tr.cfg.loco, frame = lv ? shade(lv.body, -0.45) : '#3c434b',
+        hoodC = lv ? lv.body : '#5a636c', cabC = lv ? shade(lv.body, 0.06) : '#c9a227';
 
     solebar(ctx, BL, HW);
-    ctx.fillStyle = bodyGradient(ctx, HW, '#3c434b');
+    ctx.fillStyle = bodyGradient(ctx, HW, frame);
     rr(ctx, -BL / 2, -HW, BL, HW * 2, 5); ctx.fill();
 
     // running plate walkways down both sides
@@ -703,8 +713,13 @@
     // the long hood
     ctx.fillStyle = 'rgba(0,0,0,.45)';
     rr(ctx, -BL / 2 + 7, -RH - 0.8, BL * 0.56, RH * 2 + 1.6, 3); ctx.fill();
-    ctx.fillStyle = roofGradient(ctx, RH, '#5a636c');
+    ctx.fillStyle = roofGradient(ctx, RH, hoodC);
     rr(ctx, -BL / 2 + 7.5, -RH, BL * 0.56, RH * 2, 3); ctx.fill();
+    if (lv) {                                       // the livery's band, down both sides of the hood
+      ctx.fillStyle = lv.stripe;
+      ctx.fillRect(-BL / 2 + 8, -RH + 0.4, BL * 0.56 - 1, 1.6);
+      ctx.fillRect(-BL / 2 + 8,  RH - 2.0, BL * 0.56 - 1, 1.6);
+    }
 
     // radiator grilles along the hood
     ctx.strokeStyle = 'rgba(18,22,26,.6)'; ctx.lineWidth = 1;
@@ -742,14 +757,14 @@
     weather(ctx, BL * 0.56, RH);
 
     // cab block, warning yellow, toward the leading end
-    ctx.fillStyle = shade('#c9a227', -0.04);
+    ctx.fillStyle = shade(cabC, -0.04);
     rr(ctx, BL * 0.12, -HW + 1.4, BL * 0.38 - 1, HW * 2 - 2.8, 4); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,.22)';
     ctx.fillRect(BL * 0.12, -1.6, BL * 0.38 - 1, 1.4);
     ctx.fillStyle = 'rgba(255,255,255,.14)';
     ctx.fillRect(BL * 0.12, -HW + 1.4, BL * 0.38 - 1, 1.6);
 
-    cabEnd(ctx, BL, HW, { body: '#c9a227' }, true, vh.first, true, RY.LAMPS.dloco);
+    cabEnd(ctx, BL, HW, { body: cabC }, true, vh.first, !lv, RY.LAMPS.dloco);
     buffers(ctx, -BL / 2 - 0.5, -1);
 
     // handrails
@@ -767,8 +782,9 @@
     ctx.fillStyle = '#1e232a';
     rr(ctx, -BL / 2 - 2, -HW - 1.4, BL + 4, HW * 2 + 2.8, 3); ctx.fill();
 
-    if (kind === 0) {                       // open hopper, loaded with aggregate
-      ctx.fillStyle = '#5b4a3a';
+    var coal = tr.cfg.load === 'coal';
+    if (kind === 0) {                       // open hopper, loaded with aggregate (or coal)
+      ctx.fillStyle = tr.cfg.wagon || '#5b4a3a';
       rr(ctx, -BL / 2, -HW, BL, HW * 2, 3); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,.10)';
       ctx.fillRect(-BL / 2, -HW, BL, 1.6);
@@ -777,7 +793,7 @@
       for (j = 0; j < 120; j++) {
         x = -BL / 2 + 6 + rnd() * (BL - 12);
         y = -HW + 6 + rnd() * (HW * 2 - 12);
-        ctx.fillStyle = ['#4a4238', '#5d5548', '#39332b', '#6d6454'][(rnd() * 4) | 0];
+        ctx.fillStyle = (coal ? ['#1b1b1c', '#2a2a2b', '#121213', '#38383a'] : ['#4a4238', '#5d5548', '#39332b', '#6d6454'])[(rnd() * 4) | 0];
         ctx.beginPath(); ctx.arc(x, y, 1 + rnd() * 1.9, 0, 6.2832); ctx.fill();
       }
       ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.4;
