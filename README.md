@@ -378,6 +378,25 @@ small to fit a useful picture there it folds down to its title, and says so.
 between visits. Clicking a train to ride it doesn't change how clicks work
 otherwise — a waiting train is still selected for a road as before.
 
+## Phones and tablets
+
+The game lays itself out for the screen it's on:
+
+- **Desktop and landscape tablets** keep the station on the left and the
+  Train Register on the right, with the cab view over the top of the map.
+- **Held upright** (a phone, or a tablet in portrait), the top bar, the
+  station and the register stack. The station takes the full width with the
+  cab view in a band across its top, and the readouts fold into two rows
+  under the controls. On a tablet the register and the road buttons sit side
+  by side.
+- **A phone on its side** gets a slim top bar and a narrower panel, and the
+  cab view docks at the top of the panel so the map keeps the whole stage.
+- **The start menu and end-of-shift card scroll** when they're taller than
+  the screen, so *Begin Shift* is always reachable.
+- **Touch** works throughout: tap a train, then tap its road on the map or a
+  road button. Trains are easier to hit with a finger on a small map, and
+  taps register straight away.
+
 ## Sound
 
 Two voices, both synthesised at runtime — there are no audio files to ship, so
