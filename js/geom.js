@@ -44,8 +44,10 @@
     return { x0: LAY.stopX - half, x1: LAY.stopX + half, len: half * 2 };
   };
 
-  /* The stretch of deck both faces share — where the canopy can go. */
+  /* The stretch of deck both faces share — where the canopy can go. A side
+     platform (see layoutStation) has only the one face, so it's all of it. */
   RY.islandCore = function (isl) {
+    if (!isl.upper || !isl.lower) return RY.platSpan(isl.upper || isl.lower);
     var u = RY.platSpan(isl.upper), l = RY.platSpan(isl.lower);
     return { x0: Math.max(u.x0, l.x0), x1: Math.min(u.x1, l.x1) };
   };
@@ -123,6 +125,58 @@
         { short: 'TL2', name: 'Down Through', maxCars: 9,  platform: false }
       ],
       islands: [[1, 2]]
+    },
+    /* An Indian junction. Platform 1 is a side platform against the station
+       building, the way it is at nearly every station in India; the islands
+       beyond are numbered on across the tracks; and the two middle roads are
+       platformless sidings for goods trains and expresses that don't stop.
+       style: 'india' dresses the platforms, the buildings and the trains
+       (see scene.js, cab.js and the services below). band pins the roads
+       lower on the map than the others to leave room for the building and
+       its forecourt above platform 1. A one-road entry in islands is a side
+       platform, on the outside of the outermost road. */
+    {
+      id: 'kaveripuram', name: 'Kaveripuram Junction', code: 'KVPM', difficulty: 'Advanced',
+      style: 'india', nameTamil: 'காவேரிபுரம்',
+      nameHindi: 'कावेरीपुरम',
+      blurb: 'An Indian junction: platform 1 against the station building, two sidings through the middle, six platforms in all.',
+      band: [300, 895],
+      tracks: [
+        { short: 'PF1', name: 'Platform 1', maxCars: 6, platform: true  },
+        { short: 'PF2', name: 'Platform 2', maxCars: 6, platform: true  },
+        { short: 'PF3', name: 'Platform 3', maxCars: 5, platform: true  },
+        { short: 'S1',  name: 'Siding 1',   maxCars: 8, platform: false },
+        { short: 'S2',  name: 'Siding 2',   maxCars: 8, platform: false },
+        { short: 'PF4', name: 'Platform 4', maxCars: 5, platform: true  },
+        { short: 'PF5', name: 'Platform 5', maxCars: 5, platform: true  },
+        { short: 'PF6', name: 'Platform 6', maxCars: 4, platform: true  }
+      ],
+      islands: [[0], [1, 2], [5, 6], [7]],
+      origins: { west: ['Chennai', 'Arakkonam', 'Katpadi', 'Vellore', 'Tirupati'],
+                 east: ['Bengaluru', 'Salem', 'Erode', 'Coimbatore', 'Mysuru'] },
+      /* The same six kinds of service as everywhere else — same lengths,
+         speeds, dwell and stopping pattern, so the game plays the same — but
+         run as Indian Railways would: numbered, not coded, and in its
+         liveries. loco is the locomotive's own livery where it differs from
+         the train it hauls. */
+      services: {
+        local:     { label: 'MEMU', numbers: [66001, 66099],
+                     body: '#e8dcc0', roof: '#8e9296', stripe: '#7a2231' },
+        express:   { label: 'Vande Bharat', numbers: [20601, 20699],
+                     body: '#f1f3f5', roof: '#b3bac2', stripe: '#1f5fbf' },
+        intercity: { label: 'Superfast', numbers: [12601, 12699],
+                     body: '#b1352f', roof: '#8e9398', stripe: '#d8d2c4', loco: 'wap7' },
+        sleeper:   { label: 'Mail/Express', numbers: [16101, 16399],
+                     body: '#2c5ba8', roof: '#80878e', stripe: '#e8e4d8', loco: 'wap7' },
+        freight:   { label: 'Goods', codePrefix: 'G',
+                     body: '#7a3b25', roof: '#6c6156', stripe: '#8b7b60', wagon: '#7a3b25', load: 'coal', loco: 'wdg4' },
+        nonstop:   { label: 'Rajdhani', numbers: [12429, 12454], haulage: 'loco', locoLen: 122,
+                     body: '#8e1f28', roof: '#8e9398', stripe: '#e6d3a2', loco: 'wap7' }
+      },
+      locos: {
+        wap7: { body: '#b8282b', stripe: '#f1ebe0', roof: '#8a9096' },     // electric, red with a cream band
+        wdg4: { body: '#2d5a98', stripe: '#ece6d6', roof: '#6f767e' }      // diesel hood unit, blue and cream
+      }
     },
     /* A terminus, not a through station: every road dead-ends against the
        concourse on the west, so there is no "through" traffic and nothing
@@ -222,7 +276,7 @@
     }
   ];
 
-  var CENTER_Y = 555, TRACK_GAP = 130, BAND_HALF = 300, STOP_X = 920;
+  var CENTER_Y = 555, TRACK_GAP = 130, BAND_HALF = 300, STOP_X = 920, SIDE_DECK = 40;
 
   /* A terminus is not a reshaped through station: every road dead-ends at
      a buffer stop on the west, and the single throat — on the east —
@@ -372,6 +426,7 @@
     var n = def.tracks.length;
     var gap = Math.min(TRACK_GAP, (2 * BAND_HALF) / Math.max(1, n - 1));
     var top = CENTER_Y - (n - 1) * gap / 2;
+    if (def.band) { top = def.band[0]; gap = (def.band[1] - def.band[0]) / Math.max(1, n - 1); }
     var tracks = def.tracks.map(function (t, i) {
       return {
         id: i, y: top + i * gap, name: t.name, label: t.short, short: t.short,
@@ -430,6 +485,13 @@
     }
 
     var islands = def.islands.map(function (pair) {
+      // a side platform: one road, its deck on the outside of the station
+      if (pair.length === 1) {
+        var t = tracks[pair[0]];
+        return pair[0] === 0
+          ? { y0: t.y - 25 - SIDE_DECK, y1: t.y - 25, upper: null, lower: t, side: true }
+          : { y0: t.y + 25, y1: t.y + 25 + SIDE_DECK, upper: t, lower: null, side: true };
+      }
       var a = tracks[pair[0]], b = tracks[pair[1]];
       var upper = a.y < b.y ? a : b, lower = a.y < b.y ? b : a;
       return { y0: upper.y + 25, y1: lower.y - 25, upper: upper, lower: lower };
@@ -459,6 +521,22 @@
     RY.crossTable = buildCrossTable();
     RY.station = def;
     return def;
+  };
+
+  /* What a service of this kind is at the current station: the standard
+     type (train.js RY.TYPES), with anything the station runs differently
+     laid over it (def.services) and its locomotive's livery looked up.
+     Made once per station and kind, so a train's cfg stays one object. */
+  RY.serviceCfg = function (key) {
+    var def = RY.station, base = RY.TYPES[key], over = def && def.services && def.services[key];
+    if (!over) return base;
+    if (!over.cfg) {
+      over.cfg = {};
+      Object.keys(base).forEach(function (k) { over.cfg[k] = base[k]; });
+      Object.keys(over).forEach(function (k) { if (k !== 'cfg') over.cfg[k] = over[k]; });
+      if (typeof over.loco === 'string') over.cfg.loco = def.locos[over.loco];
+    }
+    return over.cfg;
   };
 
   /* A direct shunt curve between two points a train is stationary at —

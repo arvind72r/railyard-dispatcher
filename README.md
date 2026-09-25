@@ -7,7 +7,7 @@ station efficiently; three cancelled services and your shift is over.
 
 ## Choosing a station
 
-The opening screen offers five stations, each a genuinely different track
+The opening screen offers six stations, each a genuinely different track
 layout rather than a reskin — the number of roads, how many are through roads
 versus platforms, where those through roads sit, and how the platforms pair
 into islands are all different:
@@ -19,8 +19,9 @@ into islands are all different:
 | Northgate Junction    | Advanced  | 7     | One through road, three islands — busy.       |
 | Northgate Junction (Realistic) | Advanced | 7 | The same roads, through a throat laid like a real one. |
 | Selby Yard            | Standard  | 4     | A through road at each end, one island between.|
+| Kaveripuram Junction  | Advanced  | 8     | An Indian junction: six platforms, two sidings through the middle. |
 
-A sixth, **MGR Chennai Central** (12 roads, a real terminus with a stabling
+A seventh, **MGR Chennai Central** (12 roads, a real terminus with a stabling
 yard), is built and working but **not currently on the menu** — a different
 style of play is being worked out for it. It is hidden by a single `hidden:
 true` on its entry in `js/geom.js`; nothing else about it is switched off,
@@ -75,11 +76,53 @@ are laid about half as sharp again as the classic fan's — every curve in it
 to the same radius, as gentle as the space allows, so none is left short and
 kinked.
 
+### Kaveripuram Junction is laid out and fitted out like an Indian station
+
+A fictional junction on the Chennai–Bengaluru line, drawn and run the way
+an Indian Railways station is:
+
+- **The layout.** Platform 1 is a side platform along the front of the
+  station building, as it is at nearly every station in India. Across the
+  tracks are two island platforms (2 and 3, 4 and 5) and another side
+  platform (6) on the far side. Between the islands run two platformless
+  sidings, S1 and S2, for goods trains and expresses that don't stop. A
+  one-road entry in a station's `islands` list makes a side platform, and a
+  `band` pins its roads lower on the map, leaving room for the building.
+- **The platforms.** A stone-tiled deck with a broad band of yellow tactile
+  paving along each edge, and a long shed of green corrugated sheet on green
+  columns: pitched over an island, a lean-to off the building over
+  platform 1. At the open ends are a tea stall, a book stall, a
+  drinking-water booth and stone benches. Every sign is black on yellow, and
+  the side platforms carry the station's name board. They're a good deal
+  busier than elsewhere, and far more colourful.
+- **The station building.** Cream walls under a terracotta-tiled roof, with
+  a domed clock tower over the entrance and the overhead water tank beside
+  it. In the forecourt are the big name board in Tamil, Hindi and English,
+  auto-rickshaws waiting in rank and neem trees along the road. The track
+  is laid on concrete sleepers and the ground is dry red earth.
+- **The trains** are the same six kinds of service as everywhere else, with
+  the same lengths, speeds and stopping pattern, so the game plays the same.
+  They're numbered the Indian way rather than coded, run between Indian
+  cities, and wear Indian Railways liveries:
+
+| Service      | Plays as  | Looks like |
+|--------------|-----------|------------|
+| MEMU         | local     | cream with a maroon band, 66xxx |
+| Vande Bharat | express   | white with a blue band, 20xxx |
+| Superfast    | InterCity | red LHB coaches behind a red WAP-7 electric, 12xxx |
+| Mail/Express | sleeper   | blue ICF coaches behind a WAP-7, 16xxx |
+| Goods        | freight   | a blue-and-cream diesel hood unit, open wagons of coal, tanks and containers |
+| Rajdhani     | non-stop  | deep red and cream coaches behind a WAP-7 |
+
+  The locomotives wear their own livery rather than the train's, with ends
+  to match instead of the warning yellow used elsewhere. All of this shows
+  in the cab view too.
+
 ### MGR Chennai Central is a different kind of station
 
 *(Currently hidden from the station picker — see above.)*
 
-The other five are all *through* stations — a train can enter one end and
+The other six are all *through* stations — a train can enter one end and
 carry on out the other, with the network on the west and again on the east.
 MGR Chennai Central is a **terminus**, and genuinely shaped like one: every
 platform dead-ends at a buffer stop on the west, against the concourse, and

@@ -1342,21 +1342,29 @@
   /* ================= lifecycle ================= */
   function makePeople() {
     G.people = [];
+    // An Indian platform is a great deal busier, and far more colourful.
+    var india = RY.station.style === 'india';
+    var coats = india ? ['#d9482b', '#e8a317', '#2e8b57', '#c2185b', '#1e5aa8', '#7b3fa0', '#efe9dc', '#e07b39', '#3d3d3d', '#f06292']
+                      : ['#2f3b4c', '#4a3340', '#3b4a37', '#5a4636', '#37414d', '#6b3f3f'];
+    var skins = india ? ['#8d5a3b', '#a86b45', '#6e4429', '#b87d55'] : ['#c99a6e', '#8a5f42', '#e0b48c', '#6b4630'];
     RY.ISLANDS.forEach(function (isl) {
       var midY = (isl.y0 + isl.y1) / 2;
-      [[isl.upper, isl.y0, midY - 4], [isl.lower, midY + 4, isl.y1]].forEach(function (f) {
+      // a side platform is one face, the whole depth of its deck
+      var faces = isl.side ? [[isl.upper || isl.lower, isl.y0 - 8, isl.y1 + 8]]
+                           : [[isl.upper, isl.y0, midY - 4], [isl.lower, midY + 4, isl.y1]];
+      faces.forEach(function (f) {
         var sp = RY.platSpan(f[0]);
         // busier platforms carry more people, which is another length cue
-        var n = Math.round(f[0].maxCars * 3.4);
+        var n = Math.round(f[0].maxCars * (india ? 6 : 3.4));
         for (var i = 0; i < n; i++) {
-          var y0 = f[1] + 13, y1 = f[2] - 13;
+          var m = Math.min(13, Math.max(2, (f[2] - f[1]) / 2 - 2)), y0 = f[1] + m, y1 = f[2] - m;   // narrow decks, a narrower margin
           G.people.push({
             x0: sp.x0 + 30, x1: sp.x1 - 30, y0: y0, y1: y1,
             x: sp.x0 + 30 + Math.random() * (sp.len - 60),
             y: y0 + Math.random() * (y1 - y0),
             vx: 0, vy: 0, t: Math.random() * 3,
-            coat: ['#2f3b4c', '#4a3340', '#3b4a37', '#5a4636', '#37414d', '#6b3f3f'][(Math.random() * 6) | 0],
-            skin: ['#c99a6e', '#8a5f42', '#e0b48c', '#6b4630'][(Math.random() * 4) | 0]
+            coat: coats[(Math.random() * coats.length) | 0],
+            skin: skins[(Math.random() * skins.length) | 0]
           });
         }
       });

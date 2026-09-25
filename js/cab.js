@@ -143,30 +143,9 @@
     return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
   }
 
-  /* ---------------- the world, built once per baked scene ---------------- */
-  function build() {
-    var w = { chunks: [], sleepers: [], solids: [], wires: [], masts: [] };
 
-    // Track: every piece the map draws, resampled and cut into chunks so
-    // each can be culled, clipped and fogged on its own.
-    RY.buildTrackwork().forEach(function (P) {
-      var n = Math.max(1, Math.ceil(P.len / STEP)), i, j, s, p, cl = [], nm = [];
-      for (i = 0; i <= n; i++) {
-        p = RY.pathAt(P, P.len * i / n);
-        cl.push({ x: p.x, y: p.y });
-        nm.push({ x: -Math.sin(p.a), y: Math.cos(p.a) });
-      }
-      for (i = 0; i < n; i += CHUNK) {
-        j = Math.min(n, i + CHUNK);
-        w.chunks.push({ cx: (cl[i].x + cl[j].x) / 2, cy: (cl[i].y + cl[j].y) / 2,
-                        r: STEP * CHUNK / 2 + 30, c: cl.slice(i, j + 1), n: nm.slice(i, j + 1) });
-      }
-      for (s = 10; s < P.len; s += 20) {
-        p = RY.pathAt(P, s);
-        w.sleepers.push({ x: p.x, y: p.y, a: p.a });
-      }
-    });
-
+  /* Every other station's platforms, footbridge and buildings. */
+  function buildStation(w) {
     // Platforms: each island cut into short blocks, so a block can be
     // sorted against the trains either side of it.
     RY.ISLANDS.forEach(function (isl) {
@@ -200,6 +179,135 @@
     w.solids.push({ kind: 'bldg', rgb: [111, 91, 71], c: rect(660, 50, 1252, 142), z0: 0, z1: 96 });
     w.solids.push({ kind: 'bldg', rgb: [125, 90, 60], c: rect(84, 902, 200, 976), z0: 0, z1: 58 });
     w.solids.push({ kind: 'bldg', rgb: [77, 85, 96], c: rect(1492, 912, 1678, 970), z0: 0, z1: 44 });
+  }
+
+  /* ---------------- the Indian station ---------------- */
+  /* style: 'india' — the same things the map draws for it (scene.js,
+     drawIslandIndia and drawBuildingsIndia), stood up: stone-tiled decks
+     with a broad band of yellow tactile paving, green corrugated sheds —
+     pitched over an island, a lean-to off the building over platform 1 —
+     on green columns, stalls and water booths at the open ends, the black-
+     on-yellow boards, and the station building with its tiled roof and
+     clock tower. Concrete sleepers, as Indian track is laid. */
+  var IN_PLAT = [184, 170, 140], IN_PLATSIDE = [132, 120, 98], IN_SHED = [96, 132, 102],
+      IN_FASCIA = [62, 84, 66], IN_UNDER = [70, 78, 70], IN_COL = [78, 104, 84], IN_YELLOW = [242, 195, 24],
+      IN_WALL = [216, 199, 159], IN_ROOF = [178, 93, 66];
+  function prism(w, x0, x1, cy, prof, rgb) {
+    // a roof or shed along x, in 60-long blocks so each sorts on its own
+    var x, xb, ys = prof.map(function (q) { return q[0]; });
+    for (x = x0; x < x1 - 0.5; x = xb) {
+      xb = Math.min(x1, x + 60);
+      w.solids.push({ kind: 'prism', c: rect(x, cy + Math.min.apply(null, ys), xb, cy + Math.max.apply(null, ys)),
+                      o: { x: (x + xb) / 2, y: cy, ca: 1, sa: 0 }, secs: [{ u: (x - xb) / 2, p: prof }, { u: (xb - x) / 2, p: prof }],
+                      rgb: rgb });
+    }
+  }
+  function buildIndia(w) {
+    w.sleeper = [134, 130, 122];
+    RY.ISLANDS.forEach(function (isl) {
+      var u = isl.upper && RY.platSpan(isl.upper), lo = isl.lower && RY.platSpan(isl.lower);
+      var y0 = isl.y0, y1 = isl.y1, midY = (y0 + y1) / 2, sp = [u, lo].filter(Boolean);
+      var x0 = Math.min.apply(null, sp.map(function (q) { return q.x0; })), x1 = Math.max.apply(null, sp.map(function (q) { return q.x1; }));
+      var x, xb, mx, hasU, hasL, c;
+      for (x = x0; x < x1 - 0.5; x = xb) {
+        xb = Math.min(x1, x + 40); mx = (x + xb) / 2;
+        hasU = !!u && mx >= u.x0 && mx <= u.x1; hasL = !!lo && mx >= lo.x0 && mx <= lo.x1;
+        if (!hasU && !hasL) continue;
+        c = isl.side ? rect(x, y0, xb, y1) : rect(x, hasU ? y0 : midY, xb, hasL ? y1 : midY);
+        w.solids.push({ kind: 'plat', c: c, z0: 0, z1: PLAT_H, edgeT: hasU, edgeB: hasL,
+                        top: IN_PLAT, side: IN_PLATSIDE, tac: [3, 9] });
+      }
+      var core = RY.islandCore(isl), cl = core.x1 - core.x0, cx0 = core.x0 + cl * 0.17, cx1 = core.x1 - cl * 0.17;
+      var hw = (y1 - y0) / 2 + 2, colY = [midY], sheds;
+      if (!isl.side) {                                             // pitched, ridge along the middle
+        sheds = [[-hw, 41], [hw, 41], [hw, 42.6], [0, 49], [-hw, 42.6]];
+      } else if (isl.lower) {                                      // lean-to, high against the building to the north
+        sheds = [[-hw, 41], [hw, 41], [hw, 42.6], [-hw, 49]];
+        colY = [y1 - 7];
+      } else {                                                     // lean-to, high to the south
+        sheds = [[-hw, 41], [hw, 41], [hw, 49], [-hw, 42.6]];
+        colY = [y0 + 7];
+      }
+      prism(w, cx0, cx1, midY, sheds, [IN_SHED, IN_FASCIA, IN_UNDER]);
+      colY.forEach(function (cy) {
+        for (x = cx0 + 20; x < cx1 - 4; x += 62) {
+          w.solids.push({ kind: 'box', rgb: IN_COL, top: IN_COL, c: rect(x - 1.5, cy - 1.5, x + 1.5, cy + 1.5), z0: PLAT_H, z1: 41 });
+        }
+      });
+      // a yellow platform-number board hung under each end of the shed, facing along the track
+      [cx0 + 3, cx1 - 3].forEach(function (bx) {
+        w.solids.push({ kind: 'box', rgb: IN_YELLOW, top: IN_YELLOW, c: rect(bx - 0.6, midY - 6.5, bx + 0.6, midY + 6.5), z0: 31, z1: 38 });
+      });
+      // the open ends: a stall, a water booth
+      var backY = isl.side ? (isl.lower ? y0 + 8 : y1 - 8) : midY;
+      [[core.x0 + 22, cx0 - 8], [cx1 + 8, core.x1 - 22]].forEach(function (seg, n) {
+        var m = (seg[0] + seg[1]) / 2, sx = m - (n ? -12 : 12), bx = m + (n ? -30 : 30);
+        if (seg[1] - seg[0] < 40) return;
+        w.solids.push({ kind: 'box', rgb: [107, 90, 69], top: n ? [47, 111, 178] : [200, 65, 45],
+                        c: rect(sx - 13, backY - 6, sx + 13, backY + 6), z0: PLAT_H, z1: PLAT_H + 21 });
+        w.solids.push({ kind: 'box', rgb: [215, 221, 226], top: [47, 127, 193],
+                        c: rect(bx - 5, backY - 4, bx + 5, backY + 4), z0: PLAT_H, z1: PLAT_H + 15 });
+      });
+      // the station's name boards on the side platforms, on their posts
+      if (isl.side) {
+        [core.x0 + 170, core.x1 - 170].forEach(function (bx) {
+          w.solids.push({ kind: 'box', rgb: IN_YELLOW, top: IN_YELLOW, c: rect(bx - 22, backY - 0.7, bx + 22, backY + 0.7), z0: 26, z1: 35 });
+          [-18, 18].forEach(function (d) {
+            w.solids.push({ kind: 'box', rgb: [40, 40, 40], top: [40, 40, 40], c: rect(bx + d - 0.6, backY - 0.6, bx + d + 0.6, backY + 0.6), z0: PLAT_H, z1: 26 });
+          });
+        });
+      }
+      w.solids.push({ kind: 'stair', c: rect(L.stopX - 55, midY - 20, L.stopX - 17, midY + 20), z0: PLAT_H, z1: 60 });
+    });
+
+    // the footbridge, side platform to side platform
+    var fy0 = RY.ISLANDS[0].y0 + 6, fy1 = RY.ISLANDS[RY.ISLANDS.length - 1].y1 - 6, y, yb;
+    for (y = fy0; y < fy1; y = yb) {
+      yb = Math.min(fy1, y + 40);
+      w.solids.push({ kind: 'bridge', c: rect(L.stopX - 14, y, L.stopX + 14, yb), z0: 60, z1: 70 });
+    }
+
+    // the station building (scene.js drawBuildingsIndia lays it out the same way)
+    var p1 = RY.ISLANDS[0], sp1 = RY.platSpan(p1.lower), bx0 = sp1.x0 + 38, bx1 = sp1.x1 - 38, cx = (bx0 + bx1) / 2;
+    var by0 = 120, by1 = p1.y0, ridge = (by0 + 6 + by1 - 6) / 2, rw = (by1 - by0) / 2 - 6;
+    w.solids.push({ kind: 'box', rgb: IN_WALL, top: IN_WALL, c: rect(bx0, by0, bx1, by1), z0: 0, z1: 44 });
+    prism(w, bx0 + 34, bx1 - 34, ridge, [[-rw, 44], [rw, 44], [rw, 46], [0, 64], [-rw, 46]], [IN_ROOF, [150, 76, 52], [120, 60, 42]]);
+    w.solids.push({ kind: 'box', rgb: [232, 219, 186], top: [232, 219, 186], c: rect(cx - 32, ridge - 32, cx + 32, ridge + 32), z0: 0, z1: 84 });
+    w.solids.push({ kind: 'box', rgb: [206, 190, 150], top: [242, 236, 218], c: rect(cx - 20, ridge - 20, cx + 20, ridge + 20), z0: 84, z1: 96 });
+    // the overhead water tank
+    var tx = bx0 - 110, ty = by0 + 44;
+    w.solids.push({ kind: 'box', rgb: [120, 116, 106], top: [120, 116, 106], c: rect(tx - 4, ty - 4, tx + 4, ty + 4), z0: 0, z1: 52 });
+    w.solids.push({ kind: 'box', rgb: [176, 170, 156], top: [186, 180, 166], c: rect(tx - 24, ty - 24, tx + 24, ty + 24), z0: 52, z1: 76 });
+    // the cabin and the P-way store
+    w.solids.push({ kind: 'bldg', rgb: [201, 180, 138], c: rect(84, 902, 200, 962), z0: 0, z1: 46 });
+    w.solids.push({ kind: 'bldg', rgb: [124, 110, 88], c: rect(1492, 912, 1678, 970), z0: 0, z1: 40 });
+  }
+
+  /* ---------------- the world, built once per baked scene ---------------- */
+  function build() {
+    var w = { chunks: [], sleepers: [], solids: [], wires: [], masts: [] };
+
+    // Track: every piece the map draws, resampled and cut into chunks so
+    // each can be culled, clipped and fogged on its own.
+    RY.buildTrackwork().forEach(function (P) {
+      var n = Math.max(1, Math.ceil(P.len / STEP)), i, j, s, p, cl = [], nm = [];
+      for (i = 0; i <= n; i++) {
+        p = RY.pathAt(P, P.len * i / n);
+        cl.push({ x: p.x, y: p.y });
+        nm.push({ x: -Math.sin(p.a), y: Math.cos(p.a) });
+      }
+      for (i = 0; i < n; i += CHUNK) {
+        j = Math.min(n, i + CHUNK);
+        w.chunks.push({ cx: (cl[i].x + cl[j].x) / 2, cy: (cl[i].y + cl[j].y) / 2,
+                        r: STEP * CHUNK / 2 + 30, c: cl.slice(i, j + 1), n: nm.slice(i, j + 1) });
+      }
+      for (s = 10; s < P.len; s += 20) {
+        p = RY.pathAt(P, s);
+        w.sleepers.push({ x: p.x, y: p.y, a: p.a });
+      }
+    });
+
+    if (RY.station.style === 'india') buildIndia(w); else buildStation(w);
 
     // Overhead line: the wire along each electrified path, masts either side.
     (RY.olePaths || []).forEach(function (P) {
@@ -286,7 +394,7 @@
       var ca = Math.cos(sl.a), sa = Math.sin(sl.a), hx = ca * 4, hy = sa * 4, px = -sa * 15, py = ca * 15;
       c = [toCam(sl.x + hx - px, sl.y + hy - py), toCam(sl.x + hx + px, sl.y + hy + py),
            toCam(sl.x - hx + px, sl.y - hy + py), toCam(sl.x - hx - px, sl.y - hy - py)];
-      fillPoly([P3(c[0], 0.4), P3(c[1], 0.4), P3(c[2], 0.4), P3(c[3], 0.4)], col(C_SLEEPER, fogK(d), 1));
+      fillPoly([P3(c[0], 0.4), P3(c[1], 0.4), P3(c[2], 0.4), P3(c[3], 0.4)], col(w.sleeper || C_SLEEPER, fogK(d), 1));
     }
     // rails: the dark foot and web, and the polished running surface on top
     for (i = 0; i < list.length; i++) {
@@ -514,10 +622,13 @@
      rides high behind a short, low nose, the hood carries its radiator
      grilles, fan shrouds and exhaust, and walkways with handrails run down
      both sides above a fuel tank and a pair of three-axle trucks. */
-  var D_FRAME = [66, 74, 83], D_HOOD = [122, 132, 142], D_CAB = [201, 162, 39],
+  var DEF_FRAME = [66, 74, 83], DEF_HOOD = [122, 132, 142], DEF_CAB = [201, 162, 39],
       D_WALK = [132, 140, 150], D_DARK = [28, 31, 35], D_RAIL = [214, 222, 230];
 
   function drawDiesel(tr, vh, o, k, eye, side, isFront, isRear) {
+    // grey hood, warning-yellow cab — or the railway's own livery, as on the map
+    var lv = tr.cfg.loco, D_HOOD = lv ? rgbOf(lv.body) : DEF_HOOD;
+    var D_FRAME = lv ? shadeRgb(D_HOOD, -0.45) : DEF_FRAME, D_CAB = lv ? shadeRgb(D_HOOD, 0.06) : DEF_CAB;
     var BL = vh.len - 8, hw = 18.5, hl = BL / 2, lit = 0.86;
     var hood0 = -hl + 7, cab0 = BL * 0.12, nose0 = hl - 22, tip = hl - 1;
     var hh = 13, cw = 17.3;
@@ -563,6 +674,7 @@
       if (Math.abs(eye.v) > hh) {
         var dk = col(shadeRgb(D_HOOD, -0.42), k, lit), sm = col(shadeRgb(D_HOOD, -0.2), k, lit), u, z;
         onSide(o, side, hh, hood0 + 3, cab0, 11.5, 13, dk);                              // kick plate
+        if (lv) onSide(o, side, hh, hood0 + 3, cab0, 15, 17, col(rgbOf(lv.stripe), k, lit));   // the livery's band
         for (u = hood0 + 11; u < cab0 - 2; u += 8) onSide(o, side, hh, u - 0.25, u + 0.25, 13, 30.5, sm);   // door seams
         onSide(o, side, hh, hood0 + 3.5, hood0 + 22, 18.5, 30.5, dk);                     // radiator
         for (z = 19.4; z < 30; z += 1.8) onSide(o, side, hh, hood0 + 4.3, hood0 + 21.2, z, z + 0.6, col(shadeRgb(D_HOOD, -0.1), k, lit));
@@ -591,6 +703,7 @@
       if (Math.abs(eye.v) > cw) {
         var dy = col(shadeRgb(D_CAB, -0.28), k, lit);
         onSide(o, side, cw, cab0 + 1.2, nose0, 11.5, 13, col(D_DARK, k, lit));        // kick plate
+        if (lv) onSide(o, side, cw, cab0 + 6.8, nose0, 15, 17, col(rgbOf(lv.stripe), k, lit));
         onSide(o, side, cw, cab0 + 1.3, cab0 + 6.8, 12.8, 37.6, dy);                   // cab door
         onSide(o, side, cw, cab0 + 2, cab0 + 6.1, 29, 36.4, glassStyle(k, lit));
         onSide(o, side, cw, cab0 + 7.8, nose0 - 1.3, 29, 36.4, glassStyle(k, lit));    // side window
@@ -651,8 +764,10 @@
   }
 
   function drawVehicle(tr, vh, o, k, isFront, isRear) {
-    var cfg = tr.cfg, body = rgbOf(cfg.body), stripe = rgbOf(cfg.stripe), roof = rgbOf(cfg.roof);
     var eye = localEye(o), side = eye.v > 0 ? 1 : -1, kind = vh.kind;
+    // a locomotive in its own livery, where the railway paints them apart
+    var cfg = kind === 'eloco' && tr.cfg.loco ? tr.cfg.loco : tr.cfg;
+    var body = rgbOf(cfg.body), stripe = rgbOf(cfg.stripe), roof = rgbOf(cfg.roof || tr.cfg.roof);
     var BL, hw, h, hl, secs, lit = 0.86;
     function paintBody(front) {
       return function (fc) {
@@ -727,7 +842,7 @@
       bogies(o, hl, hw, 17, 11, k, eye);
       if (eye.u < 0) buffersAt(o, hl, 1, k); else buffersAt(o, -hl, -1, k);
       solid(o, sections(hl, prof(hw, h), locoNose(hw, h), locoNose(hw, h)), k, function (fc) {
-        if (fc.cap) return C_YWARN;                           // a cab at each end, both in warning yellow
+        if (fc.cap) return tr.cfg.loco ? shadeRgb(body, -0.08) : C_YWARN;   // warning-yellow cab ends, unless in livery
         return fc.edge >= 3 && fc.edge <= 5 ? roof : body;
       });
       if (Math.abs(eye.v) > hw) {
@@ -762,13 +877,14 @@
     bogies(o, hl, hw, 12, 8.5, k, eye);
     if (eye.u < 0) buffersAt(o, hl, 1, k); else buffersAt(o, -hl, -1, k);
     var rnd = RY.rng(tr.seed + vh.idx * 977);
-    if (vh.load === 0) {                                          // open hopper of aggregate
+    if (vh.load === 0) {                                          // open hopper of aggregate, or of coal
       var hp = [[4 - hw, 8], [hw - 4, 8], [hw, 15], [hw, 28], [-hw, 28], [-hw, 15]];
+      var wb = cfg.wagon ? rgbOf(cfg.wagon) : body, ld = cfg.load === 'coal' ? [30, 29, 28] : C_HOPPERLOAD;
       solid(o, [{ u: -hl, p: hp }, { u: hl, p: hp }], k, function (fc) {
-        return fc.edge === 3 ? C_HOPPERLOAD : fc.cap ? shadeRgb(body, -0.15) : body;
+        return fc.edge === 3 ? ld : fc.cap ? shadeRgb(wb, -0.15) : wb;
       });
       if (Math.abs(eye.v) > hw) {
-        for (var hx = -hl + 12; hx < hl - 6; hx += 12) onSide(o, side, hw, hx - 0.7, hx + 0.7, 15, 28, col(shadeRgb(body, -0.3), k, lit));
+        for (var hx = -hl + 12; hx < hl - 6; hx += 12) onSide(o, side, hw, hx - 0.7, hx + 0.7, 15, 28, col(shadeRgb(wb, -0.3), k, lit));
       }
     } else if (vh.load === 1) {                                   // tank
       solid(o, boxSecs(-hl, hl, 2 - hw, hw - 2, 6, 9), k, function () { return [38, 40, 44]; });
@@ -925,7 +1041,8 @@
     var d = dist(cx, cy);
     return { d: d, fp: footprint(so.c), fn: function () {
       if (so.kind === 'plat') {
-        drawBox(so.c, so.z0, so.z1, C_PLATSIDE, C_PLAT, d, { top: function (cc, k) {
+        var tac = so.tac || [3, 5.5];
+        drawBox(so.c, so.z0, so.z1, so.side || C_PLATSIDE, so.top || C_PLAT, d, { top: function (cc, k) {
           // coping and the yellow line along whichever edges are real faces
           var a = cc[0], b = cc[1], c = cc[3], e = cc[2];
           function strip(p, q, t0, t1, rgb) {   // between the edge p–q and the far edge, fractions t0..t1 in
@@ -936,13 +1053,23 @@
                       { f: p.f + (c.f - p.f) * t1, l: p.l + (c.l - p.l) * t1, z: z }], col(rgb, k, 1));
           }
           var span = Math.abs(so.c[2].y - so.c[0].y) || 1;
-          if (so.edgeT) { strip(a, b, 0, 2.2 / span, C_COPING); strip(a, b, 3 / span, 5.5 / span, C_YELLOW); }
-          if (so.edgeB) { strip(a, b, 1 - 2.2 / span, 1, C_COPING); strip(a, b, 1 - 5.5 / span, 1 - 3 / span, C_YELLOW); }
+          if (so.edgeT) { strip(a, b, 0, 2.2 / span, C_COPING); strip(a, b, tac[0] / span, tac[1] / span, C_YELLOW); }
+          if (so.edgeB) { strip(a, b, 1 - 2.2 / span, 1, C_COPING); strip(a, b, 1 - tac[1] / span, 1 - tac[0] / span, C_YELLOW); }
         } });
       } else if (so.kind === 'canopy') drawBox(so.c, so.z0, so.z1, C_CANOPY, C_CANOPY, d);
       else if (so.kind === 'col' || so.kind === 'stair') drawBox(so.c, so.z0, so.z1, C_STEEL, C_STEEL, d);
       else if (so.kind === 'bridge') drawBox(so.c, so.z0, so.z1, C_BRIDGE, C_BRIDGE, d);
-      else drawBox(so.c, so.z0, so.z1, so.rgb, [70, 74, 80], d);
+      else if (so.kind === 'prism') {
+        // roof slopes in the first colour, the fascias in the second, the underside in the third
+        var n = so.secs[0].p.length;
+        solid(so.o, so.secs, fogK(d), function (fc) {
+          if (fc.cap) return so.rgb[1];
+          if (fc.edge === 0) return so.rgb[2];
+          var a = so.secs[0].p[fc.edge], b = so.secs[0].p[(fc.edge + 1) % n];
+          return Math.abs(a[1] - b[1]) > 1.8 ? so.rgb[0] : so.rgb[1];
+        });
+      }
+      else drawBox(so.c, so.z0, so.z1, so.rgb, so.top || [70, 74, 80], d);
     } };
   }
 
@@ -1085,7 +1212,12 @@
   function keepOut(sigs) {
     var out = [], L = RY.LAY;
     function add(x0, y0, x1, y1) { out.push([x0, y0, x1, y1]); }
-    add(650, 40, 1266, 176);   // the concourse and its entrance canopy (scene.js)
+    if (RY.station.style === 'india') {
+      // the name board in the forecourt, the station building and platform 1 along its front
+      var sp1 = RY.platSpan(RY.ISLANDS[0].lower), cx = (sp1.x0 + sp1.x1) / 2;
+      add(cx - 222, 60, cx + 222, 104);
+      add(sp1.x0 + 36, 104, sp1.x1 - 36, RY.ISLANDS[0].y1);
+    } else add(650, 40, 1266, 176);   // the concourse and its entrance canopy (scene.js)
     RY.buildTrackwork().forEach(function (P) {
       for (var k = 1; k < P.pts.length; k++) {
         var a = P.pts[k - 1], b = P.pts[k];
