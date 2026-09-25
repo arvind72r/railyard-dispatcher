@@ -9,6 +9,13 @@
   var L = RY.LAY, T = RY.TRACKS;
 
   var SUP = 2;                       // supersample factor for the baked scene
+  /* World units per CSS pixel the scene will be shown at (set by
+     bakeScene). On a desktop a pixel is under one unit, so this changes
+     nothing; on a phone, where the whole station is squeezed into a few
+     hundred pixels, it keeps the rails a visible width instead of a third
+     of a pixel. */
+  var PX = 0;
+  function minW(w, px) { return Math.max(w, px * PX); }
   var LAY_MID = L.stopX;
   function india() { return RY.station && RY.station.style === 'india'; }
 
@@ -119,10 +126,10 @@
     for (side = 0; side < 2; side++) {
       d = side ? 8.6 : -8.6;
       pts = RY.offsetPath(P, d);
-      poly(ctx, pts); ctx.strokeStyle = '#22252a'; ctx.lineWidth = 6.2; ctx.stroke();  // foot + shadow
-      poly(ctx, pts); ctx.strokeStyle = '#494e56'; ctx.lineWidth = 4.0; ctx.stroke();  // web
-      poly(ctx, pts); ctx.strokeStyle = '#9aa3ae'; ctx.lineWidth = 1.9; ctx.stroke();  // railhead
-      poly(ctx, pts); ctx.strokeStyle = 'rgba(233,241,250,.75)'; ctx.lineWidth = .7; ctx.stroke();
+      poly(ctx, pts); ctx.strokeStyle = '#22252a'; ctx.lineWidth = minW(6.2, 2.0); ctx.stroke();  // foot + shadow
+      poly(ctx, pts); ctx.strokeStyle = '#494e56'; ctx.lineWidth = minW(4.0, 1.4); ctx.stroke();  // web
+      poly(ctx, pts); ctx.strokeStyle = '#9aa3ae'; ctx.lineWidth = minW(1.9, 0.8); ctx.stroke();  // railhead
+      poly(ctx, pts); ctx.strokeStyle = 'rgba(233,241,250,.75)'; ctx.lineWidth = minW(.7, .3); ctx.stroke();
     }
   }
 
@@ -138,7 +145,7 @@
         ctx.lineTo(x + dirSign * len * t, yy + (i ? 8.6 : -8.6));
       }
       ctx.strokeStyle = '#7d8794';
-      ctx.lineWidth = 2.2 - i * 0.2;
+      ctx.lineWidth = minW(2.2 - i * 0.2, 0.8);
       ctx.stroke();
     }
     // point machine beside the blades
@@ -162,7 +169,7 @@
       ctx.beginPath();
       for (t = 0; t <= 1.001; t += 0.1) ctx.lineTo(len * t, tp.side * 7 * t * t + (i ? 8.6 : -8.6));
       ctx.strokeStyle = '#7d8794';
-      ctx.lineWidth = 2.2 - i * 0.2;
+      ctx.lineWidth = minW(2.2 - i * 0.2, 0.8);
       ctx.stroke();
     }
     // point machine on the far side from the diverging leg
@@ -894,11 +901,20 @@
   }
 
   /* ------------- bake everything ------------- */
-  RY.bakeScene = function () {
+  /* shown: screen pixels per world unit the scene will be drawn at (the
+     map's scale times the device pixel ratio). It's baked at up to twice
+     that — supersampled, as before, on a desktop — but never at more than
+     twice, since shrinking a picture much further than half loses lines
+     outright on some browsers. css: the map's scale in CSS pixels, for the
+     rails' minimum width. */
+  RY.bakeScene = function (shown, css) {
+    shown = shown || SUP / 2;
+    var sup = Math.min(SUP, Math.max(0.4, 2 * shown));
+    PX = 1 / (css || 1);
     var cv = document.createElement('canvas');
-    cv.width = RY.W * SUP; cv.height = RY.H * SUP;
+    cv.width = Math.round(RY.W * sup); cv.height = Math.round(RY.H * sup);
     var ctx = cv.getContext('2d');
-    ctx.scale(SUP, SUP);
+    ctx.scale(cv.width / RY.W, cv.height / RY.H);
 
     var rnd = RY.rng(20240824);
     var segs = RY.buildTrackwork();
@@ -955,7 +971,9 @@
     drawBuildings(ctx, rnd);
 
     RY.sceneCanvas = cv;
-    RY.SUP = SUP;
+    RY.SUP = sup;
+    RY.bakeShown = shown;
+    RY.bakeCss = css || 1;
     return cv;
   };
 })(window);
