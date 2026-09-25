@@ -158,20 +158,33 @@
          speeds, dwell and stopping pattern, so the game plays the same — but
          run as Indian Railways would: numbered, not coded, and in its
          liveries. loco is the locomotive's own livery where it differs from
-         the train it hauls. */
+         the train it hauls. rake is what each vehicle behind it is: luggage-
+         and-guard vans (slr) at both ends of an ICF train, general and
+         sleeper coaches, AC coaches, an LHB train's pantry and power cars;
+         a goods train is one kind of wagon throughout (rakes, one chosen per
+         train) with the guard's brake van last. lv: the last vehicle carries
+         its "X". nose: an EMU's front — Vande Bharat's is 'aero'. */
       services: {
-        local:     { label: 'MEMU', numbers: [66001, 66099],
+        local:     { label: 'MEMU', numbers: [66001, 66099], nose: 'flat', lv: true,
                      body: '#e8dcc0', roof: '#8e9296', stripe: '#7a2231' },
-        express:   { label: 'Vande Bharat', numbers: [20601, 20699],
+        express:   { label: 'Vande Bharat', numbers: [20601, 20699], nose: 'aero', windowBand: true, lv: true,
                      body: '#f1f3f5', roof: '#b3bac2', stripe: '#1f5fbf' },
-        intercity: { label: 'Superfast', numbers: [12601, 12699],
-                     body: '#b1352f', roof: '#8e9398', stripe: '#d8d2c4', loco: 'wap7' },
-        sleeper:   { label: 'Mail/Express', numbers: [16101, 16399],
-                     body: '#2c5ba8', roof: '#80878e', stripe: '#e8e4d8', loco: 'wap7' },
-        freight:   { label: 'Goods', codePrefix: 'G',
-                     body: '#7a3b25', roof: '#6c6156', stripe: '#8b7b60', wagon: '#7a3b25', load: 'coal', loco: 'wdg4' },
-        nonstop:   { label: 'Rajdhani', numbers: [12429, 12454], haulage: 'loco', locoLen: 122,
-                     body: '#8e1f28', roof: '#8e9398', stripe: '#e6d3a2', loco: 'wap7' }
+        intercity: { label: 'Superfast', numbers: [12601, 12699], loco: 'wap7', lv: true,
+                     body: '#b1352f', roof: '#8e9398', stripe: '#d8d2c4',
+                     rake: ['lhb-sl', 'lhb-ac', 'lhb-ac', 'power'] },
+        sleeper:   { label: 'Mail/Express', numbers: [16101, 16399], loco: 'wap7', lv: true,
+                     body: '#2c5ba8', roof: '#80878e', stripe: '#e8e4d8',
+                     rake: ['slr', 'gen', 'sl', 'ac', 'slr'] },
+        freight:   { label: 'Goods', codePrefix: 'G', loco: 'wdg4', lv: true, tank: 'black',
+                     body: '#7a3b25', roof: '#6c6156', stripe: '#8b7b60', wagon: '#7a3b25', load: 'coal',
+                     containers: ['#ecebe6', '#1f4e9c', '#9b2d25', '#2f6b3a', '#d9d4c7'],
+                     rakes: [['boxn', 'boxn', 'boxn', 'boxn', 'brakevan'],
+                             ['bcn', 'bcn', 'bcn', 'bcn', 'brakevan'],
+                             ['tank', 'tank', 'tank', 'tank', 'brakevan'],
+                             ['flat', 'flat', 'flat', 'flat', 'brakevan']] },
+        nonstop:   { label: 'Rajdhani', numbers: [12429, 12454], haulage: 'loco', locoLen: 122, loco: 'wap7', lv: true,
+                     body: '#8e1f28', roof: '#8e9398', stripe: '#e6d3a2',
+                     rake: ['lhb-ac', 'pantry', 'power'] }
       },
       locos: {
         wap7: { body: '#b8282b', stripe: '#f1ebe0', roof: '#8a9096' },     // electric, red with a cream band

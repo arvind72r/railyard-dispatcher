@@ -63,6 +63,9 @@
   RY.shade = shade;
 
   var uid = 1;
+  // wagon variants onto the loads drawWagon knows: open (coal), tank,
+  // container flat, covered van, and the guard's brake van
+  var WAGON_LOAD = { boxn: 0, tank: 1, flat: 2, bcn: 3, brakevan: 4 };
 
   /* =================== the train =================== */
   function Train(typeKey, dir, gameT) {
@@ -81,7 +84,10 @@
     this.dest   = (dir > 0 ? og.east : og.west)[(Math.random() * 5) | 0];
     this.seed = (Math.random() * 1e9) | 0;
 
-    /* Build the consist, front to back. */
+    /* Build the consist, front to back. A service can say what each vehicle
+       behind the locomotive is (rake), or give a choice of whole rakes
+       (rakes) — an Indian goods train is one kind of wagon throughout. */
+    var rake = c.rakes ? c.rakes[this.seed % c.rakes.length] : c.rake;
     this.vehicles = [];
     for (i = 0; i < c.cars; i++) {
       if (i === 0 && c.haulage === 'loco')        { kind = 'eloco'; len = c.locoLen; }
@@ -89,10 +95,12 @@
       else if (c.haulage === 'diesel')            { kind = 'wagon'; len = c.vehLen; }
       else if (c.haulage === 'loco')              { kind = 'coach'; len = c.vehLen; }
       else                                        { kind = 'emu';   len = c.vehLen; }
+      var variant = rake && i > 0 ? rake[Math.min(i - 1, rake.length - 1)] : null;
       this.vehicles.push({
         kind: kind, len: len, mid: off + len / 2, idx: i,
         first: i === 0, last: i === c.cars - 1,
-        load: (Math.random() * 3) | 0
+        variant: variant,
+        load: variant && WAGON_LOAD[variant] !== undefined ? WAGON_LOAD[variant] : (Math.random() * 3) | 0
       });
       off += len;
     }
@@ -459,6 +467,7 @@
     wagon: [[-10.5, 11.5, 2.2, 1], [10.5, 11.5, 2.2, 1]]                          // tail lamps on the last wagon
   };
   RY.LAMPS.coach = RY.LAMPS.emu;
+  RY.LAMPS.aero = [[-6.2, 11, 2.2, 1], [6.2, 11, 2.2, 1], [0, 16, 1.6, 0]];   // Vande Bharat's pointed nose
   var LAMP_WHITE = '#fff7d6', LAMP_RED = '#e0402e', LAMP_OFF = '#b9c0c8';
 
   /* A set of lamps on an end at x, from above. mode: 'head', 'tail' or off. */
@@ -471,16 +480,25 @@
 
   /* A driving end: raked screen with wipers, lamps, coupler cover. `lit`
      says this end is the head (front) or the tail (rear) of the train. */
-  function cabEnd(ctx, BL, HW, cfg, front, lit, warning, lamps) {
-    var nose = front ? 1 : -1, xe = nose * (BL / 2), i;
+  /* shape: 'aero' is Vande Bharat's long pointed nose, 'flat' an Indian
+     EMU's flat front; anything else the usual raked cab. In each, a..tip
+     are how far back and how far in the outline steps as it narrows, w0/w1
+     where the windscreen runs, lx where the lamps sit. */
+  var CAB_SHAPES = {
+    raked: { a: 22, b: 5,  bY: 5.2, tipY: 10,   w0: 21, w1: 10, wy0: 4.4, wy1: 7.6, lx: 2.4 },
+    aero:  { a: 46, b: 16, bY: 6.5, tipY: 13.5, w0: 40, w1: 25, wy0: 4.2, wy1: 7,   lx: 7   },
+    flat:  { a: 9,  b: 3,  bY: 1.8, tipY: 2.6,  w0: 9,  w1: 3.4, wy0: 3.2, wy1: 3.4, lx: 1.6 }
+  };
+  function cabEnd(ctx, BL, HW, cfg, front, lit, warning, lamps, shape) {
+    var nose = front ? 1 : -1, xe = nose * (BL / 2), i, g = CAB_SHAPES[shape] || CAB_SHAPES.raked;
 
     ctx.beginPath();
-    ctx.moveTo(xe - nose * 22, -HW + 1.2);
-    ctx.lineTo(xe - nose * 5,  -HW + 5.2);
-    ctx.lineTo(xe,             -HW + 10);
-    ctx.lineTo(xe,              HW - 10);
-    ctx.lineTo(xe - nose * 5,   HW - 5.2);
-    ctx.lineTo(xe - nose * 22,  HW - 1.2);
+    ctx.moveTo(xe - nose * g.a, -HW + 1.2);
+    ctx.lineTo(xe - nose * g.b, -HW + g.bY);
+    ctx.lineTo(xe,              -HW + g.tipY);
+    ctx.lineTo(xe,               HW - g.tipY);
+    ctx.lineTo(xe - nose * g.b,  HW - g.bY);
+    ctx.lineTo(xe - nose * g.a,  HW - 1.2);
     ctx.closePath();
     ctx.fillStyle = warning ? '#d2a828' : shade(cfg.body, -0.26);
     ctx.fill();
@@ -488,10 +506,10 @@
 
     // wrapped windscreen
     ctx.beginPath();
-    ctx.moveTo(xe - nose * 21, -HW + 4.4);
-    ctx.lineTo(xe - nose * 10, -HW + 7.6);
-    ctx.lineTo(xe - nose * 10,  HW - 7.6);
-    ctx.lineTo(xe - nose * 21,  HW - 4.4);
+    ctx.moveTo(xe - nose * g.w0, -HW + g.wy0);
+    ctx.lineTo(xe - nose * g.w1, -HW + g.wy1);
+    ctx.lineTo(xe - nose * g.w1,  HW - g.wy1);
+    ctx.lineTo(xe - nose * g.w0,  HW - g.wy0);
     ctx.closePath();
     var wg = ctx.createLinearGradient(0, -HW, 0, HW);
     wg.addColorStop(0.00, '#1a2733');
@@ -503,18 +521,19 @@
     ctx.strokeStyle = 'rgba(8,12,18,.75)'; ctx.lineWidth = 1.2; ctx.stroke();
     // centre pillar and wipers
     ctx.strokeStyle = 'rgba(255,255,255,.20)'; ctx.lineWidth = 0.9;
+    var pc = (g.w0 + g.w1) / 2;
     ctx.beginPath();
-    ctx.moveTo(xe - nose * 15.5, -HW + 6); ctx.lineTo(xe - nose * 15.5, HW - 6);
+    ctx.moveTo(xe - nose * pc, -HW + 6); ctx.lineTo(xe - nose * pc, HW - 6);
     ctx.stroke();
     ctx.strokeStyle = 'rgba(12,16,22,.7)'; ctx.lineWidth = 1;
     for (i = -1; i <= 1; i += 2) {
       ctx.beginPath();
-      ctx.moveTo(xe - nose * 12, i * (HW - 9.5));
-      ctx.lineTo(xe - nose * 19, i * (HW - 6.5));
+      ctx.moveTo(xe - nose * (g.w1 + 2), i * (HW - g.wy1 - 2));
+      ctx.lineTo(xe - nose * (g.w0 - 2), i * (HW - g.wy0 - 2));
       ctx.stroke();
     }
 
-    lampsAt(ctx, xe - nose * 2.4, lamps, lit ? (front ? 'head' : 'tail') : '');
+    lampsAt(ctx, xe - nose * g.lx, lamps, lit ? (front ? 'head' : 'tail') : '');
     ctx.fillStyle = '#20252c';
     ctx.fillRect(xe - nose * 1, -3.2, nose * 5.5, 6.4);
   }
@@ -554,6 +573,11 @@
     rr(ctx, -BL / 2, -HW, BL, HW * 2, 6.5); ctx.fill();
 
     doors(ctx, BL, HW, cfg.body, [-0.30, -0.06, 0.18, 0.40]);
+    if (cfg.windowBand) {                            // one continuous band of dark glass
+      ctx.fillStyle = 'rgba(16,22,30,.85)';
+      ctx.fillRect(-BL / 2 + 3, -HW + 2.2, BL - 6, 2.4);
+      ctx.fillRect(-BL / 2 + 3,  HW - 4.6, BL - 6, 2.4);
+    }
 
     ctx.fillStyle = cfg.stripe;
     ctx.globalAlpha = 0.9;
@@ -579,13 +603,73 @@
 
     specular(ctx, BL, RH);
 
-    if (vh.first) cabEnd(ctx, BL, HW, cfg, true, true, false, RY.LAMPS.emu);
-    if (vh.last)  cabEnd(ctx, BL, HW, cfg, false, true, false, RY.LAMPS.emu);    // the train's tail
+    var lamps = cfg.nose === 'aero' ? RY.LAMPS.aero : RY.LAMPS.emu;
+    if (vh.first) cabEnd(ctx, BL, HW, cfg, true, true, false, lamps, cfg.nose);
+    if (vh.last)  cabEnd(ctx, BL, HW, cfg, false, true, false, lamps, cfg.nose);    // the train's tail
+    if (vh.last && cfg.lv) lvMark(ctx, -BL / 2 + (cfg.nose === 'aero' ? 30 : 12));
     // +x is the leading end: a gangway toward the car ahead unless this is
     // the front car, and toward the car behind unless it's the last —
     // never on a cab end
     if (!vh.first) gangway(ctx,  BL / 2 + 0.5,  1);
     if (!vh.last)  gangway(ctx, -BL / 2 - 0.5, -1);
+  }
+
+
+  /* ---- Indian Railways coaches, from above (vh.variant; see geom.js) ----
+     An ordinary coach (general, sleeper, the luggage-and-guard van at each
+     end) breathes through two rows of round "torpedo" ventilators along its
+     roof; an AC coach has a roof-mounted package unit over each end instead;
+     the LHB power car at the end of a train is its generator, a radiator
+     grille and exhausts where the others have vents; the pantry car has its
+     kitchen chimneys. */
+  function roofVentAt(ctx, x, y) {
+    ctx.fillStyle = 'rgba(0,0,0,.4)';
+    ctx.beginPath(); ctx.arc(x + 0.6, y + 0.8, 2.3, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#4a525b';
+    ctx.beginPath(); ctx.arc(x, y, 2.2, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#6b747e';
+    ctx.beginPath(); ctx.arc(x - 0.4, y - 0.4, 1.2, 0, 6.2832); ctx.fill();
+  }
+  function coachRoof(ctx, BL, RH, v) {
+    var x, i;
+    if (v === 'power') {
+      ctx.fillStyle = '#2b3036'; ctx.fillRect(-BL * 0.22, -RH + 2, BL * 0.44, RH * 2 - 4);
+      ctx.strokeStyle = 'rgba(140,150,160,.4)'; ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      for (x = -BL * 0.22 + 2; x < BL * 0.22; x += 2.6) { ctx.moveTo(x, -RH + 3); ctx.lineTo(x, RH - 3); }
+      ctx.stroke();
+      [-BL * 0.34, BL * 0.34].forEach(function (ex) {
+        ctx.fillStyle = '#15191e'; ctx.beginPath(); ctx.arc(ex, 0, 3.4, 0, 6.2832); ctx.fill();
+        ctx.fillStyle = 'rgba(120,130,140,.5)'; ctx.beginPath(); ctx.arc(ex, -0.4, 1.8, 0, 6.2832); ctx.fill();
+      });
+      return;
+    }
+    if (/ac$/.test(v)) {
+      acPod(ctx, -BL * 0.35, 15, 12);
+      acPod(ctx,  BL * 0.35, 15, 12);
+      return;
+    }
+    for (x = -BL / 2 + 13; x < BL / 2 - 10; x += 10.5) {
+      for (i = -1; i <= 1; i += 2) roofVentAt(ctx, x, i * RH * 0.48);
+    }
+    if (v === 'pantry') {
+      [-BL * 0.1, BL * 0.1].forEach(function (cx) {
+        ctx.fillStyle = '#1b1f24'; ctx.fillRect(cx - 3, -3, 6, 6);
+        ctx.fillStyle = '#3c434b'; ctx.fillRect(cx - 2, -2, 4, 4);
+      });
+    }
+  }
+  /* The last vehicle of every Indian train carries a big "X" on its tail —
+     the guard's and the signalman's proof the train is complete. From
+     above, a yellow board with its cross, at the tail. */
+  function lvMark(ctx, x) {
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(x - 4.2, -4, 9, 9);
+    ctx.fillStyle = '#f2c318'; ctx.fillRect(x - 4.5, -4.5, 9, 9);
+    ctx.strokeStyle = '#15120a'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x - 3, -3); ctx.lineTo(x + 3, 3);
+    ctx.moveTo(x + 3, -3); ctx.lineTo(x - 3, 3);
+    ctx.stroke();
   }
 
   function drawCoach(ctx, tr, vh) {
@@ -614,9 +698,12 @@
     rr(ctx, -BL / 2 + 4.5, -RH, BL - 9, RH * 2, 4); ctx.fill();
     roofRibs(ctx, BL - 9, RH, 11);
     weather(ctx, BL - 9, RH);
-    acPod(ctx, 0, 16, 12);
-    roofVent(ctx, -BL * 0.30);
-    roofVent(ctx,  BL * 0.30);
+    if (vh.variant) coachRoof(ctx, BL, RH, vh.variant);
+    else {
+      acPod(ctx, 0, 16, 12);
+      roofVent(ctx, -BL * 0.30);
+      roofVent(ctx,  BL * 0.30);
+    }
     specular(ctx, BL, RH);
 
     // +x is the leading end. The first coach couples to the locomotive by
@@ -627,6 +714,7 @@
     if (vh.last) {
       cabEnd(ctx, BL, HW, cfg, false, true, false, RY.LAMPS.coach);   // the train's tail
       buffers(ctx, -BL / 2 - 0.5, -1);
+      if (cfg.lv) lvMark(ctx, -BL / 2 + 26);
     } else {
       gangway(ctx, -BL / 2 - 0.5, -1);
     }
@@ -808,12 +896,12 @@
     } else if (kind === 1) {                // tank wagon
       ctx.fillStyle = '#343a41';
       rr(ctx, -BL / 2, -HW, BL, HW * 2, 3); ctx.fill();
-      var tg = ctx.createLinearGradient(0, -HW, 0, HW);
-      tg.addColorStop(0.00, '#3f464d');
-      tg.addColorStop(0.34, '#9aa3ac');
-      tg.addColorStop(0.47, '#ccd4dc');
-      tg.addColorStop(0.62, '#8e97a0');
-      tg.addColorStop(1.00, '#333a41');
+      var tg = ctx.createLinearGradient(0, -HW, 0, HW), dk = tr.cfg.tank === 'black';
+      tg.addColorStop(0.00, dk ? '#16181b' : '#3f464d');       // black petroleum tanks, in India
+      tg.addColorStop(0.34, dk ? '#3a3e44' : '#9aa3ac');
+      tg.addColorStop(0.47, dk ? '#5d636b' : '#ccd4dc');
+      tg.addColorStop(0.62, dk ? '#33373c' : '#8e97a0');
+      tg.addColorStop(1.00, dk ? '#121417' : '#333a41');
       ctx.fillStyle = tg;
       rr(ctx, -BL / 2 + 6, -HW + 2.5, BL - 12, HW * 2 - 5, HW - 3); ctx.fill();
       ctx.strokeStyle = 'rgba(30,36,42,.45)'; ctx.lineWidth = 1;
@@ -829,14 +917,36 @@
       ctx.fillStyle = '#8d3a2c';                       // hazard placards
       ctx.fillRect(-BL * 0.40, -3.5, 7, 7);
       ctx.fillRect(BL * 0.40 - 7, -3.5, 7, 7);
+    } else if (kind === 3) {                // covered van (BCN), sliding doors amidships
+      var bc = tr.cfg.wagon || '#6b3a26';
+      ctx.fillStyle = bodyGradient(ctx, HW, bc);
+      rr(ctx, -BL / 2, -HW, BL, HW * 2, 3); ctx.fill();
+      ctx.fillStyle = roofGradient(ctx, HW - 3, bc);
+      rr(ctx, -BL / 2 + 2, -HW + 3, BL - 4, HW * 2 - 6, 3); ctx.fill();
+      ctx.strokeStyle = 'rgba(20,10,6,.35)'; ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      for (x = -BL / 2 + 8; x < BL / 2 - 4; x += 8) { ctx.moveTo(x, -HW + 3); ctx.lineTo(x, HW - 3); }
+      ctx.stroke();
+      ctx.fillStyle = shade(bc, -0.4);
+      ctx.fillRect(-9, -HW, 18, 2.4); ctx.fillRect(-9, HW - 2.4, 18, 2.4);
+    } else if (kind === 4) {                // guard's brake van: a cabin between two open verandahs
+      ctx.fillStyle = '#2b2f35'; rr(ctx, -BL / 2, -HW + 2, BL, HW * 2 - 4, 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(200,206,212,.5)'; ctx.lineWidth = 1;
+      ctx.strokeRect(-BL / 2 + 1.5, -HW + 3.5, BL - 3, HW * 2 - 7);         // verandah railings
+      var cb = tr.cfg.wagon || '#6b3a26';
+      ctx.fillStyle = 'rgba(0,0,0,.45)'; rr(ctx, -BL * 0.3 + 1.5, -HW + 1.5, BL * 0.6, HW * 2 - 1, 3); ctx.fill();
+      ctx.fillStyle = roofGradient(ctx, HW - 1, cb);
+      rr(ctx, -BL * 0.3, -HW + 1, BL * 0.6, HW * 2 - 2, 3); ctx.fill();
+      ctx.fillStyle = '#1d2126'; ctx.fillRect(BL * 0.2, -3, 5, 6);          // stove chimney
+      if (vh.last && tr.cfg.lv) lvMark(ctx, -BL / 2 + 5);
     } else {                                // container flat
       ctx.fillStyle = '#373d44';
       rr(ctx, -BL / 2, -HW, BL, HW * 2, 3); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,.07)';
       ctx.fillRect(-BL / 2, -HW, BL, 1.4);
-      var cols = ['#b3542f', '#2f6f8f', '#5c8a3a', '#8a8f96', '#a8952f'];
+      var cols = tr.cfg.containers || ['#b3542f', '#2f6f8f', '#5c8a3a', '#8a8f96', '#a8952f'];
       for (j = 0; j < 2; j++) {
-        var c = cols[(rnd() * 5) | 0], cw = BL / 2 - 7;
+        var c = cols[(rnd() * cols.length) | 0], cw = BL / 2 - 7;
         var cx = -BL / 2 + 5 + j * (cw + 4);
         ctx.fillStyle = 'rgba(0,0,0,.4)';
         rr(ctx, cx + 1.6, -HW + 5, cw, HW * 2 - 9, 1.5); ctx.fill();
@@ -859,6 +969,7 @@
     buffers(ctx, -BL / 2 - 0.5, -1);
     buffers(ctx,  BL / 2 + 0.5,  1);
     if (vh.last) lampsAt(ctx, -BL / 2 - 1.5, RY.LAMPS.wagon, 'tail');
+    if (vh.last && tr.cfg.lv && kind !== 4) lvMark(ctx, -BL / 2 + 6);
   }
 
   var RENDER = {

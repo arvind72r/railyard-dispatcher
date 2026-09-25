@@ -438,6 +438,13 @@
             { du: 9, p: [[-hw, 7], [hw, 7], [hw, 24], [hw - 3, 31], [hw - 9, h - 2.5], [9 - hw, h - 2.5], [3 - hw, 31], [-hw, 24]] },
             { du: 0, p: [[2 - hw, 7], [hw - 2, 7], [hw - 2, 18], [hw - 5, 23], [hw - 11, 26.5], [11 - hw, 26.5], [5 - hw, 23], [2 - hw, 18]] }];
   }
+  /* Vande Bharat's: a long, low, pointed nose, forty units of it. */
+  function aeroNose(hw, h) {
+    return [{ du: 40, p: prof(hw, h) },
+            { du: 22, p: [[-hw, 7], [hw, 7], [hw, 26], [hw - 4, 33], [hw - 10, h - 3], [10 - hw, h - 3], [4 - hw, 33], [-hw, 26]] },
+            { du: 8,  p: [[3 - hw, 7], [hw - 3, 7], [hw - 3, 19], [hw - 7, 24], [hw - 12, 27], [12 - hw, 27], [7 - hw, 24], [3 - hw, 19]] },
+            { du: 0,  p: [[-8, 7], [8, 7], [8, 14], [5, 18], [2, 19.5], [-2, 19.5], [-5, 18], [-8, 14]] }];
+  }
   /* A locomotive's: flat-fronted, with just the windscreen raked back. */
   function locoNose(hw, h) {
     return [{ du: 7, p: prof(hw, h) },
@@ -580,9 +587,11 @@
     }
   }
 
-  /* Windows along a passenger side, between the given door spans. */
-  function windowRow(o, side, hw, u0, u1, doors, k, lit) {
-    var spans = [[u0, u1]], out, i, d, a, b, u, w = 7.2, gap = 2.6;
+  /* Windows along a passenger side, between the given door spans. style:
+     'bars' for an Indian non-AC coach's barred windows, 'ac' for an AC
+     coach's wider, sealed, tinted ones. */
+  function windowRow(o, side, hw, u0, u1, doors, k, lit, style) {
+    var spans = [[u0, u1]], out, i, d, a, b, u, w = style === 'ac' ? 11 : 7.2, gap = style === 'ac' ? 4.5 : 2.6;
     doors.forEach(function (d0) {
       out = [];
       spans.forEach(function (sp) {
@@ -599,7 +608,10 @@
       var pitch = (b - a + gap) / n;
       for (d = 0; d < n; d++) {
         u = a + d * pitch;
-        onSide(o, side, hw, u, u + pitch - gap, 20.5, 30, glassStyle(k, lit));
+        onSide(o, side, hw, u, u + pitch - gap, 20.5, 30, glassStyle(k, style === 'ac' ? lit * 0.55 : lit));
+        if (style === 'bars') {
+          for (var z = 22.4; z < 29.5; z += 2.4) onSide(o, side, hw + 0.05, u, u + pitch - gap, z, z + 0.45, col([150, 156, 162], k, lit));
+        }
       }
     }
   }
@@ -785,7 +797,11 @@
       // front (+u) to the car ahead, its rear to the car behind — and a
       // coach's front meets the loco, which has none
       var gangF = kind === 'emu' ? !vh.first : vh.idx > 1, gangR = !vh.last;
-      secs = sections(hl, prof(hw, h), cabR ? emuNose(hw, h) : null, cabF ? emuNose(hw, h) : null);
+      // an EMU's front: Vande Bharat's long pointed nose, an Indian EMU's flat one, or the raked default
+      var noseFn = cfg.nose === 'aero' ? aeroNose : cfg.nose === 'flat' ? locoNose : emuNose;
+      var noseLen = cfg.nose === 'aero' ? 40 : cfg.nose === 'flat' ? 7 : 19;
+      var vv = vh.variant, ac = /ac$/.test(vv || ''), near_ = Math.sqrt(eye.u * eye.u + eye.v * eye.v) < 420;
+      secs = sections(hl, prof(hw, h), cabR ? noseFn(hw, h) : null, cabF ? noseFn(hw, h) : null);
 
       bogies(o, hl, hw, 18, 10, k, eye);
       // whatever sticks out of the far end goes behind the body
@@ -796,7 +812,7 @@
 
       // the side we can see
       if (Math.abs(eye.v) > hw) {
-        var su0 = -hl + (cabR ? 19 : 1.5), su1 = hl - (cabF ? 19 : 1.5);
+        var su0 = -hl + (cabR ? noseLen : 1.5), su1 = hl - (cabF ? noseLen : 1.5);
         onSide(o, side, hw, su0, su1, 12.5, 15, col(stripe, k, lit));
         var doorSpans = [];
         if (kind === 'emu') {
@@ -810,21 +826,40 @@
           onSide(o, side, hw, ds[0] + 1.8, ds[1] - 1.8, 20, 29.5, glassStyle(k, lit));
           onSide(o, side, hw, (ds[0] + ds[1]) / 2 - 0.3, (ds[0] + ds[1]) / 2 + 0.3, 7.4, 31.5, col([20, 22, 26], k, lit));
         });
-        windowRow(o, side, hw, su0 + 1, su1 - 1, doorSpans, k, lit);
-        if (cabF) onSide(o, side, hw, hl - 17, hl - 11, 21, 30.5, glassStyle(k, lit));
-        if (cabR) onSide(o, side, hw, -hl + 11, -hl + 17, 21, 30.5, glassStyle(k, lit));
+        if (cfg.windowBand) onSide(o, side, hw, su0 + 1, su1 - 1, 20.5, 30, glassStyle(k, lit * 0.5));   // one band of dark glass
+        else if (vv === 'power') {                                   // a generator car: louvres, no windows
+          onSide(o, side, hw, -hl + 14, hl - 14, 15, 31, col(shadeRgb(body, -0.35), k, lit));
+          for (var lx = -hl + 16; lx < hl - 15; lx += 3) onSide(o, side, hw, lx, lx + 1, 16, 30, col(shadeRgb(body, 0.1), k, lit));
+        } else if (vv === 'slr') {                                   // luggage-and-guard van: a big parcel door amidships
+          onSide(o, side, hw, -9, 9, 8.5, 31, col(shadeRgb(body, -0.3), k, lit));
+          onSide(o, side, hw, -0.3, 0.3, 8.5, 31, col([20, 22, 26], k, lit));
+          windowRow(o, side, hw, su0 + 1, -12, doorSpans, k, lit, 'bars');
+          windowRow(o, side, hw, 12, su1 - 1, doorSpans, k, lit, 'bars');
+        } else windowRow(o, side, hw, su0 + 1, su1 - 1, doorSpans, k, lit, vv ? (ac ? 'ac' : 'bars') : null);
+        if (cabF) onSide(o, side, hw, hl - noseLen + 2, hl - noseLen + 8, 21, 30.5, glassStyle(k, lit));
+        if (cabR) onSide(o, side, hw, -hl + noseLen - 8, -hl + noseLen - 2, 21, 30.5, glassStyle(k, lit));
       }
       // cab ends we can see: windscreen, and lamps if it's the front or rear of the train
-      if (cabF && eye.u > hl - 9) {
-        windscreen(o, hl, 1, hw, 19.5, 31, 8.5, false, k, lit);
+      var lampSet = cfg.nose === 'aero' ? RY.LAMPS.aero : RY.LAMPS[kind];
+      function screen(dir) {
+        if (cfg.nose === 'aero') windscreen(o, dir * (hl - 9), dir, hw - 2, 21, 31.5, 12, false, k, lit);
+        else if (cfg.nose === 'flat') windscreen(o, dir * hl, dir, hw, 19, 31, 3.5, true, k, lit);
+        else windscreen(o, dir * hl, dir, hw, 19.5, 31, 8.5, false, k, lit);
+      }
+      if (cabF && eye.u > hl - noseLen / 2) {
+        screen(1);
         onEnd(o, hl + 0.05, -2.8, 2.8, 7, 10.5, col([30, 32, 36], k, 1));     // coupler
-        endLamps(o, hl + 0.06, RY.LAMPS[kind], lampMode(isFront, false), k);
+        endLamps(o, hl + 0.06, lampSet, lampMode(isFront, false), k);
       }
-      if (cabR && eye.u < -hl + 9) {
-        windscreen(o, -hl, -1, hw, 19.5, 31, 8.5, false, k, lit);
+      if (cabR && eye.u < -hl + noseLen / 2) {
+        screen(-1);
         onEnd(o, -hl - 0.05, -2.8, 2.8, 7, 10.5, col([30, 32, 36], k, 1));
-        endLamps(o, -hl - 0.06, RY.LAMPS[kind], lampMode(false, isRear), k);
+        endLamps(o, -hl - 0.06, lampSet, lampMode(false, isRear), k);
       }
+      if (isRear && cfg.lv && eye.u < -hl) lvCross(o, -hl - 0.1, cabR ? 5.5 : 9, cabR ? 12 : 14, cabR ? 18 : 30, k);
+      // on the roof: an ordinary Indian coach's rows of ventilators, an AC
+      // coach's package units at each end, a power car's radiator and exhausts
+      if (vv && near_) roofKit(o, hl, h, vv, k);
       if (!cabR && isRear && eye.u < -hl) endLamps(o, -hl - 0.06, RY.LAMPS[kind], 'tail', k);
       // and whatever sticks out of the near end, in front of it
       if (eye.u >= 0 && gangF) bellowsAt(o, hl, 1, k);
@@ -894,10 +929,31 @@
         return q;
       };
       solid(o, [{ u: -hl + 2, p: ring(8.4) }, { u: -hl + 6.5, p: ring(11.6) },
-                { u: hl - 6.5, p: ring(11.6) }, { u: hl - 2, p: ring(8.4) }], k, function () { return C_TANK; });
+                { u: hl - 6.5, p: ring(11.6) }, { u: hl - 2, p: ring(8.4) }], k, function () { return cfg.tank === 'black' ? [46, 48, 53] : C_TANK; });
+    } else if (vh.load === 3) {                                   // covered van, doors amidships
+      var cb = rgbOf(cfg.wagon || '#6b3a26');
+      solid(o, sections(hl, prof(hw - 0.5, 35, 8)), k, function (fc) { return fc.edge >= 3 && fc.edge <= 5 ? shadeRgb(cb, -0.1) : fc.cap ? shadeRgb(cb, -0.15) : cb; });
+      if (Math.abs(eye.v) > hw) {
+        onSide(o, side, hw - 0.5, -9, 9, 9, 30, col(shadeRgb(cb, -0.35), k, lit));
+        for (var rx = -hl + 6; rx < hl - 3; rx += 8) onSide(o, side, hw - 0.4, rx - 0.4, rx + 0.4, 9, 26, col(shadeRgb(cb, -0.2), k, lit));
+      }
+    } else if (vh.load === 4) {                                   // the guard's brake van
+      var bvc = rgbOf(cfg.wagon || '#6b3a26');
+      solid(o, boxSecs(-hl, hl, -hw, hw, 7, 9.5), k, function () { return [42, 46, 52]; });
+      solid(o, sections(hl * 0.6, prof(hw - 2, 33, 9.5)), k, function (fc) { return fc.edge >= 3 && fc.edge <= 5 ? shadeRgb(bvc, -0.1) : fc.cap ? shadeRgb(bvc, -0.12) : bvc; });
+      if (Math.abs(eye.v) > hw - 2) {
+        onSide(o, side, hw - 2, -hl * 0.35, -hl * 0.1, 18, 26, glassStyle(k, lit));
+        onSide(o, side, hw - 2, hl * 0.1, hl * 0.35, 18, 26, glassStyle(k, lit));
+      }
+      [-1, 1].forEach(function (e) {                              // verandah railings
+        var u0 = e * hl * 0.6, u1 = e * (hl - 1);
+        [-1, 1].forEach(function (sd) { line3(o, [u0, sd * (hw - 1), 18], [u1, sd * (hw - 1), 18], col([190, 196, 202], k, lit), 0.5); });
+        line3(o, [u1, -(hw - 1), 18], [u1, hw - 1, 18], col([190, 196, 202], k, lit), 0.5);
+      });
     } else {                                                      // container flat
       solid(o, boxSecs(-hl, hl, -hw, hw, 7, 10.5), k, function () { return [54, 50, 46]; });
-      var cw = BL / 2 - 7, c0 = rgbOf(CONTAINERS[(rnd() * 5) | 0]), c1 = rgbOf(CONTAINERS[(rnd() * 5) | 0]);
+      var pal = cfg.containers || CONTAINERS;
+      var cw = BL / 2 - 7, c0 = rgbOf(pal[(rnd() * pal.length) | 0]), c1 = rgbOf(pal[(rnd() * pal.length) | 0]);
       var box = function (j, cc) {
         var u0 = -hl + 5 + j * (cw + 4);
         solid(o, boxSecs(u0, u0 + cw, 1 - hw, hw - 1, 10.5, 33), k, function (fc) {
@@ -911,6 +967,46 @@
     }
     if (eye.u >= 0) buffersAt(o, hl, 1, k); else buffersAt(o, -hl, -1, k);
     if (isRear && eye.u < -hl) endLamps(o, -hl - 3.3, RY.LAMPS.wagon, 'tail', k);
+    if (isRear && cfg.lv && eye.u < -hl) {                        // the last vehicle's board, yellow with its X
+      var bu = vh.load === 4 ? -hl * 0.6 - 0.1 : -hl - 0.1;
+      onEnd(o, bu, -6, 6, 13, 25, col([242, 195, 24], k, 1));
+      lvCross(o, bu - 0.05, 4.2, 14.5, 23.5, k, [21, 18, 10]);
+    }
+  }
+
+  /* The "X" painted on the tail of every Indian train's last vehicle, in
+     yellow: two bars crossing on the end face at u, half as wide as w. */
+  function lvCross(o, u, w, z0, z1, k, rgb) {
+    var t = w * 0.28, c = col(rgb || [242, 195, 24], k, 1);
+    fillPoly([Vf(o, u, -w, z0), Vf(o, u, -w + t, z0), Vf(o, u, w, z1), Vf(o, u, w - t, z1)], c);
+    fillPoly([Vf(o, u, w, z0), Vf(o, u, w - t, z0), Vf(o, u, -w, z1), Vf(o, u, -w + t, z1)], c);
+  }
+  function roofKit(o, hl, h, v, k) {
+    var u, g = [150, 155, 160];
+    if (v === 'power') {
+      solid(o, boxSecs(-hl * 0.44, hl * 0.44, -7, 7, h - 0.5, h + 2), k, function (fc) { return fc.edge === 2 ? [40, 44, 49] : [70, 75, 82]; });
+      [-hl * 0.68, hl * 0.68].forEach(function (eu) {
+        solid(o, boxSecs(eu - 2, eu + 2, -2, 2, h - 0.5, h + 5), k, function (fc) { return fc.edge === 2 ? [14, 15, 17] : [44, 47, 52]; });
+      });
+      return;
+    }
+    if (/ac$/.test(v)) {
+      [-1, 1].forEach(function (e) {
+        var c = e * hl * 0.7;
+        solid(o, boxSecs(c - 8, c + 8, -7.5, 7.5, h - 0.5, h + 4), k, function (fc) { return fc.edge === 2 ? [118, 124, 131] : [92, 98, 106]; });
+      });
+      return;
+    }
+    for (u = -hl + 13; u < hl - 10; u += 10.5) {
+      [-4.5, 4.5].forEach(function (vv) {
+        solid(o, boxSecs(u - 1.6, u + 1.6, vv - 1.6, vv + 1.6, h - 0.3, h + 2.2), k, function (fc) { return fc.edge === 2 ? [96, 102, 110] : [70, 76, 84]; });
+      });
+    }
+    if (v === 'pantry') {
+      [-hl * 0.2, hl * 0.2].forEach(function (cu) {
+        solid(o, boxSecs(cu - 2.5, cu + 2.5, -2.5, 2.5, h - 0.3, h + 4.5), k, function () { return [36, 39, 44]; });
+      });
+    }
   }
   function glow(x, y, r, rgb, a) {
     var g = ctx.createRadialGradient(x, y, 0, x, y, r);
