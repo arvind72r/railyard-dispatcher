@@ -67,6 +67,22 @@
     view.ox = (w - RY.W * sc) / 2;
     view.oy = cab ? h - RY.H * sc : (h - RY.H * sc) / 2;
     view.dpr = dpr;
+    rebakeSoon();
+  }
+  /* The scene is baked for the size it's shown at (scene.js bakeScene), so
+     a big enough change of size — a phone rotated, a window resized a long
+     way — bakes it again, once things have settled. A high-density desktop
+     screen is at the ceiling already, whatever its size, and never needs to. */
+  var rebakeTimer = 0;
+  function shownScale() { return view.scale * (view.dpr || 1); }
+  function rebakeSoon() {
+    if (!RY.sceneCanvas) return;
+    var want = Math.min(2, Math.max(0.4, 2 * shownScale()));
+    var small = view.scale < 1 || RY.bakeCss < 1;          // rails at a minimum width: size matters
+    if (Math.abs(want - RY.SUP) / RY.SUP < 0.15 &&
+        !(small && Math.abs(view.scale - RY.bakeCss) / RY.bakeCss > 0.15)) return;
+    clearTimeout(rebakeTimer);
+    rebakeTimer = setTimeout(function () { RY.bakeScene(shownScale(), view.scale); }, 180);
   }
   root.addEventListener('resize', resize);
   // the stage also changes size without the window doing so: the portrait
@@ -1446,7 +1462,7 @@
     RY.audio.init();
     RY.audio.resume();
     var def = RY.applyStation(selectedStationId);
-    RY.bakeScene();
+    RY.bakeScene(shownScale(), view.scale);
     RY.cab.reset();
     renderAkeys();
     document.querySelector('.bname').textContent = def.name.toUpperCase();
@@ -1497,7 +1513,7 @@
 
   /* ================= boot ================= */
   resize();
-  RY.bakeScene();
+  RY.bakeScene(shownScale(), view.scale);
   makePeople();
   renderAkeys();
   renderStationPicker();

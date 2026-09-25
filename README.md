@@ -396,6 +396,11 @@ The game lays itself out for the screen it's on:
 - **Touch** works throughout: tap a train, then tap its road on the map or a
   road button. Trains are easier to hit with a finger on a small map, and
   taps register straight away.
+- **The track is drawn for the screen it's on.** The station is baked into
+  a picture once, at no more than twice the size it's shown at, and baked
+  again if the size changes a lot, say when a phone is rotated. On a small
+  screen the rails are drawn at least a visible width rather than to scale,
+  which on a phone would make them a third of a pixel wide.
 
 ## Sound
 
