@@ -107,12 +107,19 @@ an Indian Railways station is:
 
 | Service      | Plays as  | Looks like |
 |--------------|-----------|------------|
-| MEMU         | local     | cream with a maroon band, 66xxx |
-| Vande Bharat | express   | white with a blue band, 20xxx |
-| Superfast    | InterCity | red LHB coaches behind a red WAP-7 electric, 12xxx |
-| Mail/Express | sleeper   | blue ICF coaches behind a WAP-7, 16xxx |
-| Goods        | freight   | a blue-and-cream diesel hood unit, open wagons of coal, tanks and containers |
-| Rajdhani     | non-stop  | deep red and cream coaches behind a WAP-7 |
+| MEMU         | local     | cream with a maroon band and a flat front, 66xxx |
+| Vande Bharat | express   | white with a blue band, a dark window band and a long pointed nose, 20xxx |
+| Superfast    | InterCity | red LHB coaches behind a red WAP-7 electric: a sleeper, two AC coaches and the power car, 12xxx |
+| Mail/Express | sleeper   | blue ICF coaches behind a WAP-7: a luggage-and-guard van at each end, general, sleeper and AC coaches, 16xxx |
+| Goods        | freight   | a blue-and-cream diesel hood unit and one kind of wagon throughout (open wagons of coal, covered vans, black tank wagons or CONCOR containers), with the guard's brake van last |
+| Rajdhani     | non-stop  | deep red and cream LHB coaches behind a WAP-7, with a pantry car and power car |
+
+  The coaches are told apart the way they are in India. Ordinary coaches
+  have barred windows and two rows of round ventilators along the roof. AC
+  coaches have wider tinted windows and a roof-mounted unit over each end.
+  The LHB power car has louvres instead of windows and a radiator and
+  exhausts on its roof. The last vehicle of every train carries the yellow
+  "X" on its tail, painted on a coach and on a board on the brake van.
 
   The locomotives wear their own livery rather than the train's, with ends
   to match instead of the warning yellow used elsewhere. All of this shows
