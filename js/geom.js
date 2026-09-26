@@ -163,32 +163,63 @@
          sleeper coaches, AC coaches, an LHB train's pantry and power cars;
          a goods train is one kind of wagon throughout (rakes, one chosen per
          train) with the guard's brake van last. lv: the last vehicle carries
-         its "X". nose: an EMU's front — Vande Bharat's is 'aero'. */
+         its "X" — only on loco-hauled trains, since a multiple unit ends in a
+         driving cab, which never does. nose: an EMU's front — Vande
+         Bharat's is 'aero'. tag: the service's colour in the Train Register,
+         one clearly apart from every other's. */
       services: {
-        local:     { label: 'MEMU', numbers: [66001, 66099], nose: 'flat', lv: true,
-                     body: '#e8dcc0', roof: '#8e9296', stripe: '#7a2231' },
-        express:   { label: 'Vande Bharat', numbers: [20601, 20699], nose: 'aero', windowBand: true, lv: true,
-                     body: '#f1f3f5', roof: '#b3bac2', stripe: '#1f5fbf' },
+        local:     { label: 'MEMU', numbers: [66001, 66099], nose: 'flat',
+                     // short local hops either side of the junction
+                     routes: [['Arakkonam', 'Jolarpettai'], ['Katpadi', 'Jolarpettai'], ['Chennai Beach', 'Vellore Cantt'],
+                              ['Arakkonam', 'Katpadi'], ['Katpadi', 'Bangarapet']],
+                     // a suburban unit's two-tone, purple below and white above, so it
+                     // can't be taken for a Vande Bharat at a glance
+                     body: '#6a2d8c', roof: '#8e9296', stripe: '#f2c318', upper: '#eeebf2', tag: '#a066d3' },
+        express:   { label: 'Vande Bharat', numbers: [20601, 20699], nose: 'aero', windowBand: true,
+                     // the two that run this line
+                     routes: [['Chennai', 'Mysuru', [20607, 20608]], ['Chennai', 'Coimbatore', [20643, 20644]]],
+                     body: '#f4f5f7', roof: '#c3c8ce', stripe: '#1d4f9f',
+                     // the fleet runs in both: the original white with a blue band
+                     // and skirt, and the saffron-and-grey of the later rakes
+                     liveries: [{ body: '#f4f5f7', roof: '#c3c8ce', stripe: '#1d4f9f', lower: '#1d4f9f', tag: '#eef1f4' },
+                                { body: '#aeb4ba', roof: '#8f969d', stripe: '#f07b1c', lower: '#f07b1c', noseColor: '#f07b1c', tag: '#f28a2e' }] },
         intercity: { label: 'Superfast', numbers: [12601, 12699], loco: 'wap7', lv: true,
-                     body: '#b1352f', roof: '#8e9398', stripe: '#d8d2c4',
+                     routes: [['Chennai', 'Bengaluru', [12607, 12608]], ['Chennai', 'Bengaluru', [12639, 12640]],
+                              ['Chennai', 'Coimbatore', [12675, 12676]], ['Chennai', 'Mangaluru', [22637, 22638]]],
+                     // LHB red and grey: silver-grey above, red below and a red line —
+                     // grey where the Rajdhani is cream, bright red where it's maroon
+                     body: '#bfc4c9', roof: '#8e9398', stripe: '#c8342b', lower: '#c8342b', tag: '#e14b3b',
                      rake: ['lhb-sl', 'lhb-ac', 'lhb-ac', 'power'] },
-        sleeper:   { label: 'Mail/Express', numbers: [16101, 16399], loco: 'wap7', lv: true,
+        sleeper:   { label: 'Mail/Express', numbers: [16101, 16399], loco: 'wap4', lv: true,
+                     routes: [['Chennai', 'Mangaluru', [12601, 12602]], ['Chennai', 'Thiruvananthapuram', [12623, 12624]],
+                              ['Chennai', 'Mysuru', [16021, 16022]], ['Chennai', 'Erode', [22649, 22650]]],
                      body: '#2c5ba8', roof: '#80878e', stripe: '#e8e4d8',
-                     rake: ['slr', 'gen', 'sl', 'ac', 'slr'] },
-        freight:   { label: 'Goods', codePrefix: 'G', loco: 'wdg4', lv: true, tank: 'black',
+                     rake: ['slr', 'gen', 'sl', 'ac', 'slr'], tag: '#3d7fe0' },
+        freight:   { label: 'Goods', codePrefix: 'G', loco: 'wdg4', lv: true, tank: 'black', tag: '#5fae5a',
+                     // one list per rake below, in the same order: coal from the
+                     // port to the power station, grain to the depot, fuel from
+                     // the refinery, containers to the inland container depot
+                     rakeRoutes: [[['Ennore Port', 'Mettur Dam']], [['Tondiarpet', 'Salem']],
+                                  [['Manali Refinery', 'Devangonthi']], [['Chennai Port', 'Whitefield ICD']]],
                      body: '#7a3b25', roof: '#6c6156', stripe: '#8b7b60', wagon: '#7a3b25', load: 'coal',
                      containers: ['#ecebe6', '#1f4e9c', '#9b2d25', '#2f6b3a', '#d9d4c7'],
                      rakes: [['boxn', 'boxn', 'boxn', 'boxn', 'brakevan'],
                              ['bcn', 'bcn', 'bcn', 'bcn', 'brakevan'],
                              ['tank', 'tank', 'tank', 'tank', 'brakevan'],
                              ['flat', 'flat', 'flat', 'flat', 'brakevan']] },
-        nonstop:   { label: 'Rajdhani', numbers: [12429, 12454], haulage: 'loco', locoLen: 122, loco: 'wap7', lv: true,
-                     body: '#8e1f28', roof: '#8e9398', stripe: '#e6d3a2',
+        nonstop:   { label: 'Rajdhani', numbers: [12429, 12454], haulage: 'loco', locoLen: 122, loco: 'wap7raj', lv: true,
+                     // a Rajdhani always runs to or from the national capital: from
+                     // New Delhi (north, off the Chennai end) to Bengaluru, and back
+                     routes: [['New Delhi', 'Bengaluru', [22692, 22691]]],
+                     // Rajdhani's own: deep maroon below, cream above, a gold line between
+                     body: '#7a1520', roof: '#8e9398', stripe: '#c9a23a', upper: '#ecd9a8', tag: '#d9b44a',
                      rake: ['lhb-ac', 'pantry', 'power'] }
       },
       locos: {
         wap7: { body: '#b8282b', stripe: '#f1ebe0', roof: '#8a9096' },     // electric, red with a cream band
-        wdg4: { body: '#2d5a98', stripe: '#ece6d6', roof: '#6f767e' }      // diesel hood unit, blue and cream
+        wap7raj: { body: '#7a1520', stripe: '#ecd9a8', roof: '#8a9096' },  // the same, in Rajdhani maroon and cream
+        wap4: { body: '#2f78c4', stripe: '#f4f2ec', roof: '#7e868e' },     // the Mail's WAP-4, blue with white bands
+        wdg4: { body: '#2f7a45', stripe: '#ece6d6', roof: '#6f767e' }      // diesel hood unit, green and cream — goods' colour
       }
     },
     /* A terminus, not a through station: every road dead-ends against the

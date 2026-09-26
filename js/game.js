@@ -335,7 +335,11 @@
     var dir = lw === le ? (Math.random() < 0.5 ? 1 : -1) : (lw < le ? 1 : -1);
     if (Math.random() < 0.25) dir = -dir;
 
-    var tr = new RY.Train(weightedType(), dir, G.gameT);
+    var type = weightedType(), tr = new RY.Train(type, dir, G.gameT), tries = 0;
+    // a real train number is one train: never two of it on the panel at once
+    while (tries++ < 8 && G.trains.some(function (o) { return o.state !== 'gone' && o.code === tr.code; })) {
+      tr = new RY.Train(type, dir, G.gameT);
+    }
 
     // Book the arrival off an actual unobstructed run rather than a guess,
     // and off the slowest road the train could legitimately be given, so a
@@ -1063,7 +1067,7 @@
       tr = list[i]; st = statusOf(tr);
       route = tr.svcName ? '' : tr.origin + ' → ' + tr.dest;
       html += '<div class="row' + (G.sel === tr ? ' sel' : '') + '" data-id="' + tr.id +
-              '" style="border-left-color:' + tr.cfg.body + '">' +
+              '" style="border-left-color:' + (tr.cfg.tag || tr.cfg.body) + '">' +
         '<div class="r1"><span class="dir">' + (tr.dir > 0 ? '▶' : '◀') + '</span>' +
         '<span class="code' + (route ? '' : ' grow') + '">' + (tr.svcName || tr.code) + '</span>' +
         (route ? '<span class="route">' + route + '</span>' : '') +
