@@ -168,9 +168,25 @@ that runs through it belong to the steam era:
     black-on-cream enamel boards. Places carry the names of the time
     (Madras, Bangalore, Mysore), and trains run Up and Down under their
     numbers: *65 Dn*, *1 Up*.
-- **The engines.** Passenger trains are hauled by the bullet-nosed **WP**
-  Pacific, in plain black with silver bands or green with brass. Goods trains
-  are hauled by the **WG** Mikado. Each has its tender heaped with coal,
+- **The engines.** They look as they did in the 1970s. Passenger trains
+  are hauled by the **WP** Pacific: its smokebox rounds forward into the
+  bullet nose, a dome with the headlamp in its middle and an eight-pointed
+  star, its rays running out across the dome. Most are plain black with a
+  silver star and silver bands. Some have the nose painted silver with the
+  star in black, and now and then there's one of the green engines with
+  brass bands. Goods trains are hauled by the **WG** Mikado, with its flat
+  smokebox door in graphite grey. The door has rivets round its rim and the
+  shed's emblem in the middle, the big headlamp sits on top, and the name
+  board is below. Both have:
+  - short chimneys, and handrails curving up from the buffer beam round the
+    smokebox;
+  - a red buffer beam with the number in yellow, big round silver-headed
+    buffers and a slatted silver cowcatcher. On the WP the running board
+    sweeps down over the cylinders to the beam;
+  - a white-lined running board and a brass number plate on the cab side;
+  - black wheels with their tyres painted white, as Indian sheds did (the
+    WP's driving wheels are Boxpok discs with lightening holes, the WG's are
+    spoked). Each has its tender heaped with coal,
   maroon coaches behind (the first class with the old yellow band), and the
   guard's brake van on the goods. Now and then a **WDM-2** diesel turns up
   on the job instead, maroon with a cream band.
@@ -178,8 +194,7 @@ that runs through it belong to the steam era:
   actually run. The coupling rod, connecting rod, crosshead and piston rod
   work with them, the two sides a quarter turn apart as a real engine's
   are. On the map the rods slide along the engine's sides. In the cab view,
-  on the side facing you, the red-rimmed spoked wheels turn and the rods
-  work.
+  on the side facing you, the wheels turn and the rods work.
 - **The steam.** Coal smoke leaves the chimney on every exhaust beat, four
   to a turn of the driving wheels. Pulling away it's slow, dark and heavy;
   at speed it's quick and light. The wind carries it off, and it spreads

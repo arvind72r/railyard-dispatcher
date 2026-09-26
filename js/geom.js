@@ -270,10 +270,13 @@
                      stock: 'coach', vehLen: 108, elec: false, lv: true, dieselShare: 0.35, diesel: 'wdm2', tag: '#e0b040',
                      body: '#6b2a1e', roof: '#55585c', stripe: '#e8c21e', rake: ['first', 'first', 'slr'], liveries: 'wp' }
       },
-      /* the WP's two liveries: plain black with silver bands, and the green
-         with brass that the showpiece engines wore */
+      /* the WP as the 1970s knew it: mostly plain black with silver bands and
+         a red buffer beam, some with the bullet nose painted silver; now and then one of the green engines with brass
+         bands that some sheds turned out */
       engines: {
         wp: [{ engine: { boiler: '#1b1c1e', beam: '#b3261e', bands: '#c9c6b8' } },
+             { engine: { boiler: '#1b1c1e', beam: '#b3261e', bands: '#c9c6b8' } },
+             { engine: { boiler: '#1b1c1e', beam: '#b3261e', bands: '#c9c6b8', nose: '#c4c7cb' } },   // a silver bullet nose
              { engine: { boiler: '#1f5b3a', tender: '#1f5b3a', cab: '#1f5b3a', beam: '#b3261e', bands: '#d4b24c' } }]
       },
       locos: {
