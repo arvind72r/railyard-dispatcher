@@ -7,7 +7,7 @@ station efficiently; three cancelled services and your shift is over.
 
 ## Choosing a station
 
-The opening screen offers six stations, each a genuinely different track
+The opening screen offers seven stations, each a genuinely different track
 layout rather than a reskin — the number of roads, how many are through roads
 versus platforms, where those through roads sit, and how the platforms pair
 into islands are all different:
@@ -20,8 +20,9 @@ into islands are all different:
 | Northgate Junction (Realistic) | Advanced | 7 | The same roads, through a throat laid like a real one. |
 | Selby Yard            | Standard  | 4     | A through road at each end, one island between.|
 | Kaveripuram Junction  | Advanced  | 8     | An Indian junction: six platforms, two sidings through the middle. |
+| Pazhayapuram Junction | Standard  | 5     | The same country in the age of steam: steam engines, semaphores, a diesel now and then. |
 
-A seventh, **MGR Chennai Central** (12 roads, a real terminus with a stabling
+An eighth, **MGR Chennai Central** (12 roads, a real terminus with a stabling
 yard), is built and working but **not currently on the menu** — a different
 style of play is being worked out for it. It is hidden by a single `hidden:
 true` on its entry in `js/geom.js`; nothing else about it is switched off,
@@ -147,11 +148,57 @@ an Indian Railways station is:
   to match instead of the warning yellow used elsewhere. All of this shows
   in the cab view too.
 
+### Pazhayapuram Junction is the age of steam
+
+The same part of India forty years earlier. The station and everything
+that runs through it belong to the steam era:
+
+- **The station.** There are no wires overhead, and the signals are
+  semaphores. Each arm reaches toward its line, red with a white band: level
+  for danger, dropped for clear. Its lamp glows red or green at dusk.
+  - The platforms are big stone slabs with a whitewashed edge, under
+    cast-iron canopies. Each canopy has a red-oxide corrugated roof and a
+    cream fretted valance, on dark green columns.
+  - A water column stands at each end of every platform for the engines,
+    and kerosene lamp posts line the open ends.
+  - The red-brick station building has a tiled roof, an arched verandah
+    along platform 1 and a clock tower.
+  - In the forecourt are a riveted water tank on its trestle, Ambassador
+    cars and a bullock cart. There's also a coal stage, a loco shed and
+    black-on-cream enamel boards. Places carry the names of the time
+    (Madras, Bangalore, Mysore), and trains run Up and Down under their
+    numbers: *65 Dn*, *1 Up*.
+- **The engines.** Passenger trains are hauled by the bullet-nosed **WP**
+  Pacific, in plain black with silver bands or green with brass. Goods trains
+  are hauled by the **WG** Mikado. Each has its tender heaped with coal,
+  maroon coaches behind (the first class with the old yellow band), and the
+  guard's brake van on the goods. Now and then a **WDM-2** diesel turns up
+  on the job instead, maroon with a cream band.
+- **The motion.** The driving wheels turn with the distance the train has
+  actually run. The coupling rod, connecting rod, crosshead and piston rod
+  work with them, the two sides a quarter turn apart as a real engine's
+  are. On the map the rods slide along the engine's sides. In the cab view,
+  on the side facing you, the red-rimmed spoked wheels turn and the rods
+  work.
+- **The steam.** Coal smoke leaves the chimney on every exhaust beat, four
+  to a turn of the driving wheels. Pulling away it's slow, dark and heavy;
+  at speed it's quick and light. The wind carries it off, and it spreads
+  and thins as it goes. Starting away, white steam blows sideways from the
+  open cylinder cocks. Standing, the engine simmers with a thin wisp, and
+  every so often the safety valves lift in a white plume. You see it on the
+  map, and in the cab view it hangs in the air in 3D.
+- **The sound.** A steam engine sounds a chime whistle instead of a horn,
+  pitched lower on a goods engine. You hear its exhaust beat, each chuff
+  deeper and louder when it's working hard and quickening with speed.
+- **Riding one.** In a steam engine's cab you stand on the driver's side,
+  higher up, looking forward past the boiler, with its bands, dome and
+  chimney, and the smoke ahead of you.
+
 ### MGR Chennai Central is a different kind of station
 
 *(Currently hidden from the station picker — see above.)*
 
-The other six are all *through* stations — a train can enter one end and
+The other seven are all *through* stations — a train can enter one end and
 carry on out the other, with the network on the west and again on the east.
 MGR Chennai Central is a **terminus**, and genuinely shaped like one: every
 platform dead-ends at a buffer stop on the west, against the concourse, and
@@ -484,5 +531,6 @@ clock, and not counting pauses — and the end-of-shift report gives it as
 | `js/geom.js`    | the station roster, the layout generator that turns a road list into real geometry (including the yard, for a terminus, and the scissors-and-lead throat for a realistic station), path building, arc-length maths, the precomputed throat crossing table, the platform<->yard shunt curve |
 | `js/scene.js`   | the permanent way — ballast, sleepers, rails, platforms, the stabling yard, buildings — baked once to an offscreen canvas |
 | `js/train.js`   | rolling stock: consists, movement physics, plan-view rendering |
+| `js/steam.js`   | steam engines: their layout, the map drawing, the wheels and motion, and the smoke and steam |
 | `js/cab.js`     | the cab view: the plan stood up in perspective from the leading cab, and the driver's console |
 | `js/game.js`    | clock, interlocking, scoring, difficulty, HUD and input, and the terminus timetable scheduler |

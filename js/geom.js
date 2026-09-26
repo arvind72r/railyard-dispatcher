@@ -222,6 +222,64 @@
         wdg4: { body: '#2f7a45', stripe: '#ece6d6', roof: '#6f767e' }      // diesel hood unit, green and cream — goods' colour
       }
     },
+    /* The same country forty years earlier, in the age of steam. No wires
+       overhead, semaphore signals, low stone platforms under cast-iron
+       canopies, a red-brick building with an arched verandah, and a water
+       column at the end of each platform. The trains are steam-hauled — WP
+       Pacifics on the passenger trains, WG Mikados on the goods — behind
+       maroon coaches, and now and then a WDM-2 diesel turns up instead
+       (dieselShare). Places carry their names of the time, and trains their
+       Up and Down numbers. style: 'retro' dresses it (scene.js, cab.js);
+       electric: false leaves the overhead line out; signals: 'semaphore'. */
+    {
+      id: 'pazhayapuram', name: 'Pazhayapuram Junction', code: 'PZM', difficulty: 'Standard',
+      style: 'retro', electric: false, signals: 'semaphore',
+      blurb: 'The age of steam: WP and WG engines, semaphore signals, and a diesel now and then.',
+      band: [320, 840],
+      tracks: [
+        { short: 'PF1', name: 'Platform 1',  maxCars: 6, platform: true  },
+        { short: 'PF2', name: 'Platform 2',  maxCars: 6, platform: true  },
+        { short: 'PF3', name: 'Platform 3',  maxCars: 5, platform: true  },
+        { short: 'GL',  name: 'Goods Loop',  maxCars: 8, platform: false },
+        { short: 'PF4', name: 'Platform 4',  maxCars: 5, platform: true  }
+      ],
+      islands: [[0], [1, 2], [4]],
+      origins: { west: ['Madras', 'Arkonam', 'Katpadi', 'Villupuram'],
+                 east: ['Bangalore', 'Salem', 'Erode', 'Coimbatore', 'Mysore'] },
+      services: {
+        local:     { label: 'Passenger', numbers: [101, 199], upDown: true, haulage: 'steam', steamClass: 'wp', locoLen: 150,
+                     stock: 'coach', elec: false, lv: true, dieselShare: 0.15, diesel: 'wdm2', tag: '#c49a6c',
+                     body: '#6b2a1e', roof: '#55585c', stripe: '#d8c79b', rake: ['slr', 'gen'], liveries: 'wp' },
+        express:   { label: 'Express', numbers: [21, 49], upDown: true, haulage: 'steam', steamClass: 'wp', locoLen: 150,
+                     stock: 'coach', elec: false, lv: true, dieselShare: 0.15, diesel: 'wdm2', tag: '#d9534f',
+                     body: '#6b2a1e', roof: '#55585c', stripe: '#d8c79b', rake: ['slr', 'gen', 'first'], liveries: 'wp' },
+        intercity: { label: 'Mail', numbers: [1, 12], upDown: true, haulage: 'steam', steamClass: 'wp', locoLen: 150,
+                     stock: 'coach', elec: false, lv: true, dieselShare: 0.15, diesel: 'wdm2', tag: '#5b8fd6',
+                     body: '#6b2a1e', roof: '#55585c', stripe: '#d8c79b', rake: ['slr', 'gen', 'sl', 'first'], liveries: 'wp' },
+        sleeper:   { label: 'Janata Express', numbers: [51, 79], upDown: true, haulage: 'steam', steamClass: 'wp', locoLen: 150,
+                     stock: 'coach', elec: false, lv: true, dieselShare: 0.15, diesel: 'wdm2', tag: '#9b7fd1',
+                     body: '#6b2a1e', roof: '#55585c', stripe: '#d8c79b', rake: ['slr', 'gen', 'gen', 'sl', 'slr'], liveries: 'wp' },
+        freight:   { label: 'Goods', codePrefix: 'G', haulage: 'steam', steamClass: 'wg', locoLen: 146, vehLen: 90,
+                     stock: 'wagon', elec: false, lv: true, dieselShare: 0.25, diesel: 'wdm2', tag: '#6fae5a',
+                     body: '#5a3322', roof: '#6c6156', stripe: '#8b7b60', wagon: '#5a3322', load: 'coal', tank: 'black',
+                     engine: { boiler: '#1c1c1d', beam: '#b3261e', bands: '#8f8c82' },
+                     rakes: [['boxn', 'boxn', 'boxn', 'boxn', 'brakevan'],
+                             ['bcn', 'bcn', 'bcn', 'bcn', 'brakevan'],
+                             ['tank', 'tank', 'tank', 'tank', 'brakevan']] },
+        nonstop:   { label: 'Deluxe Express', numbers: [13, 19], upDown: true, haulage: 'steam', steamClass: 'wp', locoLen: 150,
+                     stock: 'coach', vehLen: 108, elec: false, lv: true, dieselShare: 0.35, diesel: 'wdm2', tag: '#e0b040',
+                     body: '#6b2a1e', roof: '#55585c', stripe: '#e8c21e', rake: ['first', 'first', 'slr'], liveries: 'wp' }
+      },
+      /* the WP's two liveries: plain black with silver bands, and the green
+         with brass that the showpiece engines wore */
+      engines: {
+        wp: [{ engine: { boiler: '#1b1c1e', beam: '#b3261e', bands: '#c9c6b8' } },
+             { engine: { boiler: '#1f5b3a', tender: '#1f5b3a', cab: '#1f5b3a', beam: '#b3261e', bands: '#d4b24c' } }]
+      },
+      locos: {
+        wdm2: { body: '#8a2a1f', stripe: '#e9dcc0', roof: '#5f6368' }   // the ALCo diesel, maroon with a cream band
+      }
+    },
     /* A terminus, not a through station: every road dead-ends against the
        concourse on the west, so there is no "through" traffic and nothing
        ever exits east — east instead leads to a stabling yard, and every
@@ -579,6 +637,8 @@
       Object.keys(base).forEach(function (k) { over.cfg[k] = base[k]; });
       Object.keys(over).forEach(function (k) { if (k !== 'cfg') over.cfg[k] = over[k]; });
       if (typeof over.loco === 'string') over.cfg.loco = def.locos[over.loco];
+      if (typeof over.diesel === 'string') over.cfg.diesel = def.locos[over.diesel];
+      if (typeof over.liveries === 'string') over.cfg.liveries = def.engines[over.liveries];
     }
     return over.cfg;
   };

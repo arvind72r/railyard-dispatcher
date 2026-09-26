@@ -283,6 +283,85 @@
     w.solids.push({ kind: 'bldg', rgb: [124, 110, 88], c: rect(1492, 912, 1678, 970), z0: 0, z1: 40 });
   }
 
+
+  /* ---------------- the steam-era station ---------------- */
+  /* What scene.js drawIslandRetro and drawBuildingsRetro lay out, stood up:
+     stone platforms with a whitewashed edge, red-oxide canopies on dark
+     green cast-iron columns with a cream valance, water columns, and the
+     red-brick station with its verandah and clock tower. */
+  var RT_STONE = [160, 155, 142], RT_STONESIDE = [118, 112, 100], RT_ROOF = [128, 62, 44], RT_VAL = [236, 226, 198],
+      RT_IRON = [44, 62, 50], RT_BRICK = [140, 60, 42], RT_TILE = [130, 62, 44];
+  function buildRetro(w) {
+    RY.ISLANDS.forEach(function (isl) {
+      var u = isl.upper && RY.platSpan(isl.upper), lo = isl.lower && RY.platSpan(isl.lower);
+      var y0 = isl.y0, y1 = isl.y1, midY = (y0 + y1) / 2, sp = [u, lo].filter(Boolean);
+      var x0 = Math.min.apply(null, sp.map(function (q) { return q.x0; })), x1 = Math.max.apply(null, sp.map(function (q) { return q.x1; }));
+      var x, xb, mx, hasU, hasL, c;
+      for (x = x0; x < x1 - 0.5; x = xb) {
+        xb = Math.min(x1, x + 40); mx = (x + xb) / 2;
+        hasU = !!u && mx >= u.x0 && mx <= u.x1; hasL = !!lo && mx >= lo.x0 && mx <= lo.x1;
+        if (!hasU && !hasL) continue;
+        c = isl.side ? rect(x, y0, xb, y1) : rect(x, hasU ? y0 : midY, xb, hasL ? y1 : midY);
+        w.solids.push({ kind: 'plat', c: c, z0: 0, z1: PLAT_H - 2, edgeT: hasU, edgeB: hasL,
+                        top: RT_STONE, side: RT_STONESIDE, tac: false, coping: [238, 235, 226] });
+      }
+      var core = RY.islandCore(isl), cl = core.x1 - core.x0, cx0 = core.x0 + cl * 0.14, cx1 = core.x1 - cl * 0.14;
+      var hw = (y1 - y0) / 2 - 3, roof, colY = [midY];
+      if (!isl.side) roof = [[-hw, 38], [hw, 38], [hw, 39.5], [0, 45], [-hw, 39.5]];
+      else if (isl.lower) { roof = [[-hw, 38], [hw, 38], [hw, 39.5], [-hw, 45]]; colY = [y1 - 8]; }
+      else { roof = [[-hw, 38], [hw, 38], [hw, 45], [-hw, 39.5]]; colY = [y0 + 8]; }
+      prism(w, cx0, cx1, midY, roof, [RT_ROOF, [96, 46, 32], [70, 52, 44]]);
+      [-1, 1].forEach(function (e) {                                // the valance along each eave
+        var vy = midY + e * hw;
+        if (isl.side && ((isl.lower && e < 0) || (!isl.lower && e > 0))) return;
+        for (x = cx0; x < cx1 - 0.5; x = xb) {
+          xb = Math.min(cx1, x + 60);
+          w.solids.push({ kind: 'box', rgb: RT_VAL, top: RT_VAL, c: rect(x, vy - 0.5, xb, vy + 0.5), z0: 35, z1: 38 });
+        }
+      });
+      colY.forEach(function (cy) {
+        for (x = cx0 + 16; x < cx1 - 4; x += 48) {
+          w.solids.push({ kind: 'box', rgb: RT_IRON, top: RT_IRON, c: rect(x - 1.2, cy - 1.2, x + 1.2, cy + 1.2), z0: PLAT_H - 2, z1: 38 });
+        }
+      });
+      // water columns at the platform ends, their arms swung along the platform
+      [u && [u, y0, 1], lo && [lo, y1, -1]].filter(Boolean).forEach(function (f) {
+        [f[0].x0 + 18, f[0].x1 - 18].forEach(function (wx) {
+          var wy = f[1] + f[2] * 9;
+          w.solids.push({ kind: 'box', rgb: RT_IRON, top: RT_IRON, c: rect(wx - 2, wy - 2, wx + 2, wy + 2), z0: PLAT_H - 2, z1: 44 });
+          w.solids.push({ kind: 'box', rgb: RT_IRON, top: RT_IRON, c: rect(wx, wy - 1.2, wx + 14, wy + 1.2), z0: 41, z1: 44 });
+        });
+      });
+      w.solids.push({ kind: 'stair', c: rect(L.stopX - 55, midY - 20, L.stopX - 17, midY + 20), z0: PLAT_H - 2, z1: 60 });
+    });
+    var fy0 = RY.ISLANDS[0].y0 + 6, fy1 = RY.ISLANDS[RY.ISLANDS.length - 1].y1 - 6, y, yb;
+    for (y = fy0; y < fy1; y = yb) {
+      yb = Math.min(fy1, y + 40);
+      w.solids.push({ kind: 'bridge', c: rect(L.stopX - 14, y, L.stopX + 14, yb), z0: 60, z1: 70 });
+    }
+    // the station building: brick, a tiled roof, a verandah, the clock tower
+    var p1 = RY.ISLANDS[0], sp1 = RY.platSpan(p1.lower), bx0 = sp1.x0 + 30, bx1 = sp1.x1 - 30, cx = (bx0 + bx1) / 2;
+    var by0 = 126, by1 = p1.y0, vy = by1 - 22, ridge = (by0 + 6 + vy) / 2, rw = (vy - by0 - 6) / 2;
+    w.solids.push({ kind: 'box', rgb: RT_BRICK, top: RT_BRICK, c: rect(bx0, by0, bx1, vy), z0: 0, z1: 40 });
+    prism(w, bx0 + 12, bx1 - 12, ridge, [[-rw, 40], [rw, 40], [rw, 42], [0, 58], [-rw, 42]], [RT_TILE, [100, 46, 32], [80, 40, 30]]);
+    prism(w, bx0, bx1, (vy + by1) / 2, [[-11, 26], [11, 26], [11, 27], [-11, 32]], [[217, 207, 182], [190, 180, 158], [150, 140, 120]]);
+    for (var ax = bx0 + 6; ax < bx1 - 6; ax += 22) {                // the verandah's piers
+      w.solids.push({ kind: 'box', rgb: RT_BRICK, top: RT_BRICK, c: rect(ax, by1 - 3, ax + 4, by1), z0: 0, z1: 26 });
+    }
+    w.solids.push({ kind: 'box', rgb: [155, 74, 52], top: [155, 74, 52], c: rect(cx - 30, ridge - 30, cx + 30, ridge + 30), z0: 0, z1: 78 });
+    prism(w, cx - 30, cx + 30, ridge, [[-30, 78], [30, 78], [0, 96]], [[124, 58, 40], [110, 52, 36], [80, 40, 30]]);
+    // the water tank on its trestle
+    var tx = bx0 - 105, ty = by0 + 40;
+    [[-20, -18], [20, -18], [-20, 18], [20, 18]].forEach(function (q) {
+      w.solids.push({ kind: 'box', rgb: [60, 62, 64], top: [60, 62, 64], c: rect(tx + q[0] - 1.5, ty + q[1] - 1.5, tx + q[0] + 1.5, ty + q[1] + 1.5), z0: 0, z1: 58 });
+    });
+    w.solids.push({ kind: 'box', rgb: [88, 94, 98], top: [32, 52, 58], c: rect(tx - 26, ty - 24, tx + 26, ty + 24), z0: 58, z1: 82 });
+    // cabin, coal stage and loco shed
+    w.solids.push({ kind: 'bldg', rgb: RT_BRICK, c: rect(84, 902, 200, 962), z0: 0, z1: 50 });
+    w.solids.push({ kind: 'box', rgb: [74, 66, 56], top: [24, 24, 25], c: rect(262, 930, 492, 970), z0: 0, z1: 14 });
+    w.solids.push({ kind: 'bldg', rgb: [59, 56, 51], c: rect(1492, 912, 1678, 970), z0: 0, z1: 52 });
+  }
+
   /* ---------------- the world, built once per baked scene ---------------- */
   function build() {
     var w = { chunks: [], sleepers: [], solids: [], wires: [], masts: [] };
@@ -307,7 +386,9 @@
       }
     });
 
-    if (RY.station.style === 'india') buildIndia(w); else buildStation(w);
+    if (RY.station.style === 'india') buildIndia(w);
+    else if (RY.station.style === 'retro') buildRetro(w);
+    else buildStation(w);
 
     // Overhead line: the wire along each electrified path, masts either side.
     (RY.olePaths || []).forEach(function (P) {
@@ -332,9 +413,16 @@
      rigid body the map draws, so the view yaws through a curve with it. */
   function placeCamera(tr) {
     var v0 = tr.vehicles[0], cs = Math.max(0, tr.s - v0.mid);
-    var p = RY.pathAt(tr.path, cs), fwd = (v0.len - 8) / 2 - 6;
+    var p = RY.pathAt(tr.path, cs), fwd = (v0.len - 8) / 2 - 6, lat = 0;
+    EYE = 30;
+    if (v0.kind === 'steam') {
+      // a steam engine's cab is behind its boiler: the driver stands on the
+      // left, higher up, and looks forward past it
+      var g = RY.steamGeo(tr.cfg.steamClass || 'wp', v0.len);
+      fwd = g.boilerRear - 3; lat = -13; EYE = 49;
+    }
     cam.a = p.a; cam.ca = Math.cos(p.a); cam.sa = Math.sin(p.a);
-    cam.x = p.x + cam.ca * fwd; cam.y = p.y + cam.sa * fwd;
+    cam.x = p.x + cam.ca * fwd - cam.sa * lat; cam.y = p.y + cam.sa * fwd + cam.ca * lat;
   }
   function near(x, y, r) {
     var dx = x - cam.x, dy = y - cam.y, f = dx * cam.ca + dy * cam.sa;
@@ -775,6 +863,140 @@
     }
   }
 
+
+  /* ---------------- steam ---------------- */
+  /* A steam engine and its tender, laid out by RY.steamGeo (steam.js) the
+     same as on the map: the boiler a long cylinder, the smokebox black
+     (a WP's closing into its bullet nose), chimney, dome and cab, the
+     tender heaped with coal. On the side we can see, the driving wheels
+     turn and the motion works: coupling rod, connecting rod, crosshead and
+     piston rod, each at the crank angle the train's own run gives it
+     (RY.steamCrank), so they move exactly as fast as it does. */
+  function ringP(r, zc, n, flat) {
+    var q = [], i, a;
+    n = n || 10;
+    for (i = 0; i < n; i++) {
+      a = -Math.PI / 2 + i * 6.2832 / n;
+      q.push([r * Math.cos(a), Math.max(flat || -1e9, zc + r * Math.sin(a))]);
+    }
+    return q;
+  }
+  function wheel3d(o, u, v, r, ang, k, rim, spokes) {
+    var pts = [], i, a, c = col(rim || [70, 72, 76], k, 1), dk = col([20, 20, 22], k, 1), sp = col([120, 124, 128], k, 1);
+    for (i = 0; i < 16; i++) { a = i * 0.3927; pts.push(Vf(o, u + Math.cos(a) * r, v, r + Math.sin(a) * r)); }
+    fillPoly(pts, c);
+    pts = [];
+    for (i = 0; i < 16; i++) { a = i * 0.3927; pts.push(Vf(o, u + Math.cos(a) * r * 0.84, v, r + Math.sin(a) * r * 0.84)); }
+    fillPoly(pts, dk);
+    for (i = 0; i < (spokes || 10); i++) {
+      a = ang + i * 6.2832 / (spokes || 10);
+      line3(o, [u, v, r], [u + Math.cos(a) * r * 0.82, v, r + Math.sin(a) * r * 0.82], sp, 0.55);
+    }
+    pts = [];
+    for (i = 0; i < 8; i++) { a = i * 0.785; pts.push(Vf(o, u + Math.cos(a) * r * 0.2, v, r + Math.sin(a) * r * 0.2)); }
+    fillPoly(pts, sp);
+  }
+  function drawSteam(tr, vh, o, k, eye, side, isFront) {
+    var cfg = tr.cfg, e = cfg.engine || {}, g = RY.steamGeo(cfg.steamClass || 'wp', vh.len), hl = g.hl;
+    var boiler = rgbOf(e.boiler || '#1d1e20'), tender = rgbOf(e.tender || e.boiler || '#1d1e20');
+    var cabC = rgbOf(e.cab || e.boiler || '#1d1e20'), black = [22, 23, 25], lit = 0.86, band = rgbOf(e.bands || '#b9b6a8');
+    var near_ = Math.sqrt(eye.u * eye.u + eye.v * eye.v) < 520, u, i;
+    var wv = side * 14.6;                                         // the wheels' plane, just outside the frames
+
+    // the tender, and its coal
+    solid(o, boxSecs(-hl, g.tenderFront, -16, 16, 8, 33), k, function (fc) { return fc.cap ? shadeRgb(tender, -0.12) : tender; });
+    solid(o, [{ u: -hl + 5, p: [[-13, 33], [13, 33], [7, 38.5], [-7, 38.5]] }, { u: g.tenderFront - 8, p: [[-13, 33], [13, 33], [7, 39.5], [-7, 39.5]] }], k,
+          function () { return [26, 26, 27]; });
+    // frame, running boards and buffer beam
+    solid(o, boxSecs(g.cabRear - 2, hl - 2, -9, 9, 7, 18), k, function () { return [30, 31, 34]; });
+    solid(o, boxSecs(g.cabRear, hl - 3, -16.5, 16.5, 18, 19.6), k, function (fc) { return fc.edge === 2 ? [70, 72, 76] : [40, 41, 44]; });
+    solid(o, boxSecs(hl - 3, hl, -16, 16, 9, 17.5), k, function () { return rgbOf(e.beam || '#b3261e'); });
+    if (eye.u > 0) buffersAt(o, hl, 1, k);
+    // cylinders, either side at the front
+    [-1, 1].forEach(function (sd) {
+      solid(o, [{ u: g.cyl[0], p: ringP(4.6, g.rD + 1.5, 8).map(function (q) { return [q[0] + sd * 15.6, q[1]]; }) },
+                { u: g.cyl[1], p: ringP(4.6, g.rD + 1.5, 8).map(function (q) { return [q[0] + sd * 15.6, q[1]]; }) }], k,
+            function () { return [44, 45, 48]; });
+    });
+    // the boiler, the smokebox and its nose
+    var bp = ringP(g.rB, g.zB, 12);
+    solid(o, [{ u: g.boilerRear, p: bp }, { u: g.smokeRear, p: bp }], k, function () { return boiler; });
+    var secs = [{ u: g.smokeRear, p: bp }];
+    if (g.bullet) {
+      secs.push({ u: g.nose - 9, p: bp }, { u: g.nose - 4, p: ringP(g.rB * 0.78, g.zB - 1, 12) },
+                { u: g.nose - 1, p: ringP(g.rB * 0.45, g.zB - 2.5, 12) }, { u: g.nose, p: ringP(g.rB * 0.15, g.zB - 3, 12) });
+    } else secs.push({ u: g.nose, p: bp });
+    solid(o, secs, k, function () { return black; });
+    if (g.bullet && eye.u > g.nose - 8) {                         // the silver ring round the nose
+      var ring = ringP(g.rB * 0.62, g.zB - 1.5, 16).map(function (q) { return Vf(o, g.nose - 3.2, q[0], q[1]); });
+      strokeLine(ring.concat([ring[0]]), col([215, 217, 220], k, 1), Math.max(0.5, 0.9 * focal / Math.max(20, ring[0].f)));
+    }
+    // boiler bands
+    if (near_ && Math.abs(eye.v) > 4) {
+      [g.boilerRear + 2, (g.boilerRear + g.smokeRear) / 2, g.smokeRear - 2].forEach(function (bu) {
+        var pts = ringP(g.rB + 0.15, g.zB, 12).filter(function (q) { return q[0] * side > -2; }).map(function (q) { return Vf(o, bu, q[0], q[1]); });
+        strokeLine(pts, col(band, k, lit), Math.max(0.5, 0.8 * focal / Math.max(20, pts[0].f)));
+      });
+    }
+    // chimney, dome, safety valves, headlamp
+    var cz0 = g.zB + g.rB - 1, cz1 = g.zB + g.rB + 6.5, cp = [[-2.4, cz0], [2.4, cz0], [3.4, cz1], [-3.4, cz1]];
+    solid(o, [{ u: g.chimney - 3.4, p: cp }, { u: g.chimney + 3.4, p: cp }], k, function (fc) { return fc.edge === 2 ? [8, 8, 9] : black; });
+    solid(o, [{ u: g.dome - 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }, { u: g.dome + 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }], k,
+          function () { return shadeRgb(boiler, 0.1); });
+    solid(o, boxSecs(g.valve - 1.5, g.valve + 1.5, -3, 3, g.zB + g.rB - 1, g.zB + g.rB + 2.5), k, function () { return [184, 145, 47]; });
+    solid(o, boxSecs(g.nose - 12, g.nose - 7, -2.5, 2.5, g.zB + g.rB - 2, g.zB + g.rB + 3), k, function () { return [150, 156, 162]; });
+    // the cab
+    solid(o, boxSecs(g.cabRear, g.boilerRear, -17, 17, 14, 44), k, function (fc) { return fc.cap ? shadeRgb(cabC, -0.1) : cabC; });
+    solid(o, [{ u: g.cabRear - 1.5, p: [[-18, 44], [18, 44], [14, 47], [-14, 47]] }, { u: g.boilerRear + 1.5, p: [[-18, 44], [18, 44], [14, 47], [-14, 47]] }], k,
+          function () { return [42, 43, 46]; });
+    if (Math.abs(eye.v) > 17) {
+      onSide(o, side, 17, g.cabRear + 3, g.boilerRear - 3, 29, 39, glassStyle(k, lit));
+      onSide(o, side, 17, g.cabRear + 2, g.cabRear + 5, 14, 29, col([10, 10, 11], k, lit));   // the cab's open side
+    }
+    // the lamps: headlamp over the nose, markers on the buffer beam
+    if (eye.u > hl - 3) endLamps(o, hl + 0.1, RY.LAMPS.steam.slice(1), lampMode(isFront, false), k);
+    if (eye.u > g.nose - 8) endLamps(o, g.nose - 6.8, RY.LAMPS.steam.slice(0, 1), lampMode(isFront, false), k);
+
+    // the running gear, on the side we can see
+    if (!near_ || Math.abs(eye.v) < 10) return;
+    var a = RY.steamCrank(tr, g, side), m = RY.steamMotion(g, a), rodV = wv + side * 1.6;
+    g.lead.forEach(function (lu) { wheel3d(o, lu, wv, g.rLead, a * g.rD / g.rLead, k, null, 8); });
+    g.trail.forEach(function (tu) { wheel3d(o, tu, wv, g.rTrail, a * g.rD / g.rTrail, k, null, 8); });
+    for (i = 0; i < 2; i++) {                                     // the tender's bogies
+      [-8, 0, 8].forEach(function (d) { wheel3d(o, g.tender[i] + d, side * 13.6, g.rT, a * g.rD / g.rT, k, null, 6); });
+    }
+    g.drivers.forEach(function (du) { wheel3d(o, du, wv, g.rD, a, k, [150, 30, 26], 14); });   // drivers, rims in red
+    var steel = col([196, 200, 206], k, 1), dark = col([90, 94, 100], k, 1);
+    var pins = g.drivers.map(function (du) { return [du + g.rc * Math.cos(a), rodV, g.rD + g.rc * Math.sin(a)]; });
+    line3(o, pins[0], pins[pins.length - 1], steel, 1.5);                                    // coupling rod
+    line3(o, [g.cyl[0] - 12, rodV, g.rD + 4.2], [g.cyl[0], rodV, g.rD + 4.2], dark, 0.8);    // slide bars
+    line3(o, [g.cyl[0] - 12, rodV, g.rD - 1.2], [g.cyl[0], rodV, g.rD - 1.2], dark, 0.8);
+    line3(o, [m.crossU, rodV + side * 0.4, g.rD + 1.5], [g.cyl[0], rodV + side * 0.4, g.rD + 1.5], steel, 0.9);   // piston rod
+    line3(o, [m.pinU, rodV + side * 0.8, m.pinZ], [m.crossU, rodV + side * 0.8, g.rD + 1.5], steel, 1.7);        // connecting rod
+    solid(o, boxSecs(m.crossU - 1.8, m.crossU + 1.8, rodV - 0.8, rodV + 0.8, g.rD - 0.8, g.rD + 3.8), k, function () { return [170, 174, 180]; });
+    pins.forEach(function (pn) {
+      var q = [], j;
+      for (j = 0; j < 8; j++) q.push(Vf(o, pn[0] + Math.cos(j * 0.785) * 1.1, rodV + side, pn[2] + Math.sin(j * 0.785) * 1.1));
+      fillPoly(q, col([60, 62, 66], k, 1));
+    });
+  }
+  /* Riding one: the boiler ahead of us, down the right-hand side of the view,
+     with its chimney at the far end — what the driver looks past. */
+  function ownBoiler(tr) {
+    var vh = tr.vehicles[0], g = RY.steamGeo(tr.cfg.steamClass || 'wp', vh.len), p = RY.pathAt(tr.path, Math.max(0, tr.s - vh.mid));
+    var o = { x: p.x, y: p.y, ca: Math.cos(p.a), sa: Math.sin(p.a) }, e = tr.cfg.engine || {};
+    var boiler = rgbOf(e.boiler || '#1d1e20'), bp = ringP(g.rB, g.zB, 14);
+    solid(o, [{ u: g.boilerRear + 1, p: bp }, { u: g.smokeRear, p: bp }], 0, function () { return boiler; });
+    solid(o, [{ u: g.smokeRear, p: bp }, { u: g.nose - 6, p: ringP(g.rB * 0.8, g.zB - 1, 14) }], 0, function () { return [22, 23, 25]; });
+    [g.boilerRear + 3, (g.boilerRear + g.smokeRear) / 2, g.smokeRear - 2].forEach(function (bu) {     // its bands
+      var pts = ringP(g.rB + 0.15, g.zB, 14).filter(function (q) { return q[1] > g.zB - 3; }).map(function (q) { return Vf(o, bu, q[0], q[1]); });
+      strokeLine(pts, col(rgbOf(e.bands || '#b9b6a8'), 0, 0.6), Math.max(0.5, 0.35 * focal / Math.max(10, pts[0].f)));
+    });
+    solid(o, [{ u: g.dome - 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }, { u: g.dome + 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }], 0,
+          function () { return shadeRgb(boiler, 0.1); });
+    solid(o, boxSecs(g.chimney - 3, g.chimney + 3, -3, 3, g.zB + g.rB - 1, g.zB + g.rB + 6.5), 0, function () { return [10, 10, 11]; });
+  }
+
   function drawVehicle(tr, vh, o, k, isFront, isRear) {
     var eye = localEye(o), side = eye.v > 0 ? 1 : -1, kind = vh.kind;
     // a locomotive in its own livery, where the railway paints them apart
@@ -916,6 +1138,7 @@
     }
 
     if (kind === 'dloco') { drawDiesel(tr, vh, o, k, eye, side, isFront, isRear); return; }
+    if (kind === 'steam') { drawSteam(tr, vh, o, k, eye, side, isFront); return; }
 
     // freight wagons, loaded as the map shows them
     BL = vh.len - 11; hw = 16; hl = BL / 2;
@@ -1029,6 +1252,45 @@
 
   /* A signal: post, head, and — if it's facing us — its lamps. */
   var ASPECT = [[240, 64, 48], [236, 176, 40], [72, 226, 110]];
+
+  /* A lower-quadrant semaphore: a tall lattice-dark post, and at its top an
+     arm reaching toward its line, red with a white band, level at danger
+     and dropped forty-five degrees for clear. Its spectacle, a coloured
+     glass in front of a lamp, shows red or green — bright once it's dark. */
+  function semaphoreItem(s, dirCam, d) {
+    var toward = s.ty !== undefined ? (s.ty > s.y ? 1 : -1) : 1;
+    return { d: d - 3, fp: footprint(rect(s.x - 1.5, s.y - 1.5, s.x + 1.5, s.y + 1.5)), fn: function () {
+      var k = fogK(d), zp = 56, ang = s.aspect === 2 ? -0.75 : 0, L = 11, fx = s.x - s.dirX * 1.2;
+      drawBox(rect(s.x - 0.8, s.y - 0.8, s.x + 0.8, s.y + 0.8), 0, zp + 5, C_POST, C_POST, d);
+      drawBox(rect(s.x - 1.4, s.y - 1.4, s.x + 1.4, s.y + 1.4), zp + 5, zp + 6.5, C_POST, C_POST, d);   // the finial cap
+      // the arm: from the pivot toward the track, level or dropped
+      var c0 = toCam(fx, s.y), c1 = toCam(fx, s.y + toward * L * Math.cos(ang));
+      var z1 = zp + L * Math.sin(ang), th = 1.2;
+      var armPts = function (a0, a1) {
+        var cA = toCam(fx, s.y + toward * L * a0 * Math.cos(ang)), cB = toCam(fx, s.y + toward * L * a1 * Math.cos(ang));
+        var zA = zp + L * a0 * Math.sin(ang), zB = zp + L * a1 * Math.sin(ang);
+        return [P3(cA, zA - th), P3(cB, zB - th), P3(cB, zB + th), P3(cA, zA + th)];
+      };
+      if (s.dirX === dirCam) {
+        fillPoly(armPts(0.05, 0.66), col([200, 38, 30], k, 1));
+        fillPoly(armPts(0.66, 0.8), col([242, 239, 230], k, 1));
+        fillPoly(armPts(0.8, 1), col([200, 38, 30], k, 1));
+      } else {
+        fillPoly(armPts(0.05, 0.66), col([236, 234, 226], k, 1));   // its back, white with a black band
+        fillPoly(armPts(0.66, 0.8), col([30, 30, 30], k, 1));
+        fillPoly(armPts(0.8, 1), col([236, 234, 226], k, 1));
+      }
+      if (s.dirX !== dirCam) return;
+      var lp = toCam(fx, s.y - toward * 1.8);
+      if (lp.f < NEAR) return;
+      var P = { f: lp.f, l: lp.l, z: zp - 2.5 }, x = sx(P), y = sy(P), r = Math.max(0.8, 1.2 * focal / lp.f);
+      var rgb = s.aspect === 2 ? ASPECT[2] : ASPECT[0];
+      ctx.fillStyle = 'rgb(' + rgb.join(',') + ')';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+      glow(x, y, r * (3 + 5 * night), rgb, (0.2 + 0.6 * night) * (1 - k));
+    } };
+  }
+
   function signalItem(s, dirCam) {
     if (!near(s.x, s.y, 10)) return null;
     var d = dist(s.x, s.y);
@@ -1036,6 +1298,7 @@
     // inboard of it (scene.js roadMasts); sorted on its own distance the
     // mast would come out nearer and paint over the head, so the signal
     // sorts a touch nearer than it is — on the mast's face, not behind it.
+    if (RY.station.signals === 'semaphore') return semaphoreItem(s, dirCam, d);
     return { d: d - 3, fp: footprint(rect(s.x - 1.8, s.y - 2.4, s.x + 1.8, s.y + 2.4)), fn: function () {
       var k = fogK(d);
       drawBox(rect(s.x - 0.7, s.y - 0.7, s.x + 0.7, s.y + 0.7), 0, 41, C_POST, C_POST, d);
@@ -1140,6 +1403,28 @@
     return out;
   }
 
+
+  /* A puff of smoke or steam, as a soft disc facing us wherever it hangs:
+     coal smoke grey to near black, steam white; thinning as it ages. */
+  function puffItem(q) {
+    if (!near(q.x, q.y, q.r + 10)) return null;
+    var c = toCam(q.x, q.y);
+    if (c.f < NEAR + 2) return null;
+    var d = dist(q.x, q.y);
+    return { d: d, fn: function () {
+      var P = { f: c.f, l: c.l, z: q.z }, x = sx(P), y = sy(P), r = q.r * focal / c.f, t = q.age / q.life, k = fogK(d);
+      if (r < 0.4) return;
+      var a = Math.pow(1 - t, 1.4) * (q.kind ? 0.6 : 0.45 + 0.3 * q.dark) * (1 - k * 0.8), rgb;
+      if (q.kind) rgb = [236, 239, 242];
+      else { var dd = q.dark * (1 - t * 0.7), v = 54 + (175 - 54) * (1 - dd); rgb = [v, v - 2, v - 5]; }
+      rgb = rgb.map(function (v2) { return (v2 * (1 - 0.8 * night)) | 0; });
+      var gr = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
+      gr.addColorStop(0, 'rgba(' + rgb.join(',') + ',' + a.toFixed(3) + ')');
+      gr.addColorStop(1, 'rgba(' + rgb.join(',') + ',0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+    } };
+  }
+
   function solidItem(so) {
     var cx = (so.c[0].x + so.c[2].x) / 2, cy = (so.c[0].y + so.c[2].y) / 2;
     var r = Math.max(Math.abs(so.c[2].x - so.c[0].x), Math.abs(so.c[2].y - so.c[0].y)) / 2;
@@ -1147,7 +1432,7 @@
     var d = dist(cx, cy);
     return { d: d, fp: footprint(so.c), fn: function () {
       if (so.kind === 'plat') {
-        var tac = so.tac || [3, 5.5];
+        var tac = so.tac || [3, 5.5];   // false: no yellow line at all
         drawBox(so.c, so.z0, so.z1, so.side || C_PLATSIDE, so.top || C_PLAT, d, { top: function (cc, k) {
           // coping and the yellow line along whichever edges are real faces
           var a = cc[0], b = cc[1], c = cc[3], e = cc[2];
@@ -1159,8 +1444,9 @@
                       { f: p.f + (c.f - p.f) * t1, l: p.l + (c.l - p.l) * t1, z: z }], col(rgb, k, 1));
           }
           var span = Math.abs(so.c[2].y - so.c[0].y) || 1;
-          if (so.edgeT) { strip(a, b, 0, 2.2 / span, C_COPING); strip(a, b, tac[0] / span, tac[1] / span, C_YELLOW); }
-          if (so.edgeB) { strip(a, b, 1 - 2.2 / span, 1, C_COPING); strip(a, b, 1 - tac[1] / span, 1 - tac[0] / span, C_YELLOW); }
+          var cop = so.coping || C_COPING, cw = so.coping ? 4 : 2.2;
+          if (so.edgeT) { strip(a, b, 0, cw / span, cop); if (so.tac !== false) strip(a, b, tac[0] / span, tac[1] / span, C_YELLOW); }
+          if (so.edgeB) { strip(a, b, 1 - cw / span, 1, cop); if (so.tac !== false) strip(a, b, 1 - tac[1] / span, 1 - tac[0] / span, C_YELLOW); }
         } });
       } else if (so.kind === 'canopy') drawBox(so.c, so.z0, so.z1, C_CANOPY, C_CANOPY, d);
       else if (so.kind === 'col' || so.kind === 'stair') drawBox(so.c, so.z0, so.z1, C_STEEL, C_STEEL, d);
@@ -1339,7 +1625,7 @@
   function keepOut(sigs) {
     var out = [], L = RY.LAY;
     function add(x0, y0, x1, y1) { out.push([x0, y0, x1, y1]); }
-    if (RY.station.style === 'india') {
+    if (RY.station.style === 'india' || RY.station.style === 'retro') {
       // the name board in the forecourt, the station building and platform 1 along its front
       var sp1 = RY.platSpan(RY.ISLANDS[0].lower), cx = (sp1.x0 + sp1.x1) / 2;
       add(cx - 222, 60, cx + 222, 104);
@@ -1446,6 +1732,9 @@
     for (i = 0; i < world.solids.length; i++) if ((it = solidItem(world.solids[i]))) items.push(it);
     for (i = 0; i < world.wires.length; i++) if ((it = wireItem(world.wires[i]))) items.push(it);
     for (i = 0; i < world.masts.length; i++) if ((it = mastItem(world.masts[i]))) items.push(it);
+    // smoke and steam, each puff where it hangs in the air
+    var sl = RY.steam ? RY.steam.list : [];
+    for (i = 0; i < sl.length; i++) if ((it = puffItem(sl[i]))) items.push(it);
     for (i = 0; i < sigs.length; i++) if ((it = signalItem(sigs[i], dirCam))) items.push(it);
     for (i = 0; i < G.trains.length; i++) {
       tr = G.trains[i];
@@ -1458,6 +1747,7 @@
     items.sort(function (a, b) { return b.d - a.d; });
     items = painterOrder(items);
     for (i = 0; i < items.length; i++) items[i].fn();
+    if (target.vehicles[0].kind === 'steam') ownBoiler(target);
 
     console_(target, sigs, dirCam);
   }
