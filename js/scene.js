@@ -18,6 +18,7 @@
   function minW(w, px) { return Math.max(w, px * PX); }
   var LAY_MID = L.stopX;
   function india() { return RY.station && RY.station.style === 'india'; }
+  function retro() { return RY.station && RY.station.style === 'retro'; }
 
   function poly(ctx, pts) {
     ctx.beginPath();
@@ -43,6 +44,10 @@
       g.addColorStop(0,   '#2f2a20');
       g.addColorStop(0.35,'#372f23');
       g.addColorStop(1,   '#29241c');
+    } else if (retro()) {             // dusty, and darkened with years of cinders
+      g.addColorStop(0,   '#302b24');
+      g.addColorStop(0.35,'#37312a');
+      g.addColorStop(1,   '#2a2520');
     } else {
       g.addColorStop(0,   '#232a24');
       g.addColorStop(0.35,'#2c332b');
@@ -55,7 +60,7 @@
     var i, x, y, r;
     for (i = 0; i < 5200; i++) {
       x = rnd() * RY.W; y = rnd() * RY.H; r = 0.6 + rnd() * 1.9;
-      ctx.fillStyle = (india() ? ['rgba(104,74,52,.5)','rgba(66,56,40,.6)','rgba(96,90,62,.35)','rgba(44,38,30,.5)']
+      ctx.fillStyle = (india() || retro() ? ['rgba(104,74,52,.5)','rgba(66,56,40,.6)','rgba(96,90,62,.35)','rgba(44,38,30,.5)']
                                : ['rgba(70,84,64,.55)','rgba(46,56,44,.6)','rgba(88,100,74,.35)','rgba(34,42,34,.5)'])[(rnd() * 4) | 0];
       ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
     }
@@ -262,6 +267,7 @@
 
   function drawIsland(ctx, isl, rnd) {
     if (india()) { drawIslandIndia(ctx, isl, rnd); return; }
+    if (retro()) { drawIslandRetro(ctx, isl, rnd); return; }
     var u = RY.platSpan(isl.upper), l = RY.platSpan(isl.lower);
     var y0 = isl.y0, y1 = isl.y1, midY = (y0 + y1) / 2;
     var core = RY.islandCore(isl);
@@ -526,6 +532,113 @@
     ctx.fillStyle = '#2f7fc1'; ctx.fillRect(x - 5, y - 4, 10, 3);
   }
 
+
+  /* ---------------- the steam-era station ---------------- */
+  /* style: 'retro' (Pazhayapuram). Low platforms of big stone slabs with a
+     whitewashed edge, under cast-iron canopies — a roof of corrugated
+     sheet in red oxide, fringed all round with the fretted wooden valance
+     of the period — kerosene lamp posts along the edge, a water column at
+     each end for the engines, and enamel boards, black on cream. */
+  var RT_CREAM = '#ece2c6', RT_INK = '#1a1712';
+  function drawIslandRetro(ctx, isl, rnd) {
+    var faces = [], y0 = isl.y0, y1 = isl.y1, midY = (y0 + y1) / 2, core = RY.islandCore(isl), i, x, y;
+    if (isl.upper) faces.push({ sp: RY.platSpan(isl.upper), tk: isl.upper, edgeY: y0, inw: 1 });
+    if (isl.lower) faces.push({ sp: RY.platSpan(isl.lower), tk: isl.lower, edgeY: y1, inw: -1 });
+    var xa = Math.min.apply(null, faces.map(function (f) { return f.sp.x0; }));
+    var xb = Math.max.apply(null, faces.map(function (f) { return f.sp.x1; }));
+    function outline() {
+      ctx.beginPath();
+      faces.forEach(function (f) {
+        faceOutline(ctx, f.sp, f.edgeY, isl.side ? (f.inw > 0 ? y1 : y0) : midY + f.inw * 3);
+      });
+    }
+    ctx.save(); ctx.translate(2, 5); outline(); ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill(); ctx.restore();
+    outline(); ctx.fillStyle = '#9d988a'; ctx.fill();
+    ctx.save(); outline(); ctx.clip();
+    // big stone slabs, laid in courses
+    ctx.strokeStyle = 'rgba(58,54,46,.4)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (y = y0 + 8; y < y1; y += 16) { ctx.moveTo(xa, y); ctx.lineTo(xb, y); }
+    for (y = y0, i = 0; y < y1; y += 16, i++) {
+      for (x = xa + (i % 2) * 14; x < xb; x += 28) { ctx.moveTo(x, y); ctx.lineTo(x, Math.min(y1, y + 16)); }
+    }
+    ctx.stroke();
+    for (i = 0; i < 900; i++) {
+      ctx.fillStyle = rnd() < 0.5 ? 'rgba(255,250,236,.05)' : 'rgba(40,34,26,.10)';
+      ctx.fillRect(xa + rnd() * (xb - xa), y0 + rnd() * (y1 - y0), 1.7, 1.7);
+    }
+    // the edge: dressed coping, whitewashed
+    faces.forEach(function (f) {
+      var e = f.edgeY, d = f.inw;
+      ctx.fillStyle = '#efece3'; ctx.fillRect(f.sp.x0, d > 0 ? e : e - 4, f.sp.len, 4);
+      ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(f.sp.x0, d > 0 ? e + 4 : e - 5, f.sp.len, 1);
+    });
+    ctx.restore();
+
+    // the canopy: red-oxide corrugated roof, a fretted valance all round
+    var cl = core.x1 - core.x0, cx0 = core.x0 + cl * 0.14, cx1 = core.x1 - cl * 0.14, sy0, sy1;
+    if (isl.side) { sy0 = isl.lower ? y0 - 2 : y0 + 4; sy1 = isl.lower ? y1 - 4 : y1 + 2; }
+    else { sy0 = y0 + 5; sy1 = y1 - 5; }
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(cx0 + 4, sy0 + 6, cx1 - cx0, sy1 - sy0);
+    ctx.fillStyle = '#7b3b2a'; ctx.fillRect(cx0, sy0, cx1 - cx0, sy1 - sy0);
+    ctx.strokeStyle = 'rgba(30,12,8,.35)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (x = cx0 + 2; x < cx1; x += 3.2) { ctx.moveTo(x, sy0); ctx.lineTo(x, sy1); }
+    ctx.stroke();
+    if (!isl.side) {                                          // a ridge, and the roof falling away either side
+      ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(cx0, sy0, cx1 - cx0, midY - sy0);
+      ctx.fillStyle = '#a7644c'; ctx.fillRect(cx0, midY - 1.2, cx1 - cx0, 2.4);
+    }
+    ctx.fillStyle = RT_CREAM;                                 // the valance: a fretted fringe
+    [sy0, sy1].forEach(function (ey, n) {
+      for (x = cx0; x < cx1 - 3; x += 6) {
+        ctx.beginPath(); ctx.moveTo(x, ey); ctx.lineTo(x + 3, ey + (n ? 3.2 : -3.2)); ctx.lineTo(x + 6, ey); ctx.closePath(); ctx.fill();
+      }
+    });
+    ctx.fillRect(cx0 - 1, sy0 - 1, 2, sy1 - sy0 + 2); ctx.fillRect(cx1 - 1, sy0 - 1, 2, sy1 - sy0 + 2);
+
+    // kerosene lamp posts along the open ends, and a water column at each end
+    [[core.x0 + 20, cx0 - 6], [cx1 + 6, core.x1 - 20]].forEach(function (seg) {
+      for (x = seg[0]; x < seg[1]; x += 34) {
+        var ly = isl.side ? (isl.lower ? y0 + 7 : y1 - 7) : midY;
+        ctx.fillStyle = '#1e2124'; ctx.beginPath(); ctx.arc(x, ly, 2.2, 0, 6.2832); ctx.fill();
+        ctx.fillStyle = 'rgba(255,214,140,.55)'; ctx.beginPath(); ctx.arc(x, ly, 1.1, 0, 6.2832); ctx.fill();
+      }
+    });
+    faces.forEach(function (f) {
+      [f.sp.x0 + 18, f.sp.x1 - 18].forEach(function (wx) {
+        var wy = f.edgeY + f.inw * 9;
+        waterColumn(ctx, wx, wy, f.inw);
+      });
+    });
+    // enamel boards: road numbers and the station's name
+    faces.forEach(function (f) {
+      var tk = f.tk, k, mx, py = isl.side ? (y0 + y1) / 2 : midY - f.inw * 13;
+      for (k = 1; k < tk.maxCars; k++) {
+        mx = f.sp.x0 + 22 + (f.sp.len - 44) * k / tk.maxCars;
+        ctx.fillStyle = 'rgba(30,24,10,.55)';
+        ctx.fillRect(mx - 0.9, f.edgeY + f.inw * 5, 1.8, f.inw * 5);
+      }
+      var txt = tk.short + ' · MAX ' + tk.maxCars;
+      signPlate(ctx, f.sp.x0 + 64, py, txt, RT_CREAM, RT_INK);
+      signPlate(ctx, f.sp.x1 - 64, py, txt, RT_CREAM, RT_INK);
+    });
+    if (isl.side) {
+      var nm = RY.station.name.replace(' Junction', ' JN.').toUpperCase();
+      [core.x0 + 175, core.x1 - 175].forEach(function (bx) { signPlate(ctx, bx, (y0 + y1) / 2, nm, RT_CREAM, RT_INK); });
+    }
+  }
+  /* A water column from above: its base, the pillar, and the arm swung
+     along the platform, with its leather hose. */
+  function waterColumn(ctx, x, y, inw) {
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(x + 1.5, y + 2, 4.5, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#2c3a30'; ctx.beginPath(); ctx.arc(x, y, 4.2, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#44584a'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = '#2c3a30'; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 14, y); ctx.stroke();
+    ctx.fillStyle = '#3a2a1c'; ctx.fillRect(x + 12, y - 1.5, 4, 3);
+  }
+
   /* A through road carries no platform at all — say so on the ground.
      A station can have one of these at the top, the bottom, or (as at
      Selby Yard) both, so the sign sits on whichever side of the whole
@@ -586,7 +699,7 @@
      trains by the live renderer, since it passes above them. */
   RY.drawFootbridge = function (ctx) {
     var bx = L.stopX, y0 = 268, y1 = 884, i, y, k;   // starts clear of the lineside signs
-    if (india()) { y0 = RY.ISLANDS[0].y0 + 6; y1 = RY.ISLANDS[RY.ISLANDS.length - 1].y1 - 6; }   // side platform to side platform
+    if (india() || retro()) { y0 = RY.ISLANDS[0].y0 + 6; y1 = RY.ISLANDS[RY.ISLANDS.length - 1].y1 - 6; }   // side platform to side platform
     ctx.save();
     ctx.globalAlpha = 0.88;               // let the stock read through it
     ctx.fillStyle = 'rgba(0,0,0,.4)';
@@ -701,6 +814,7 @@
   function drawBuildings(ctx, rnd) {
     var i, x;
     if (india()) { drawBuildingsIndia(ctx, rnd); return; }
+    if (retro()) { drawBuildingsRetro(ctx, rnd); return; }
 
     // boundary fences top and bottom
     [206, RY.H - 74].forEach(function (fy) {
@@ -900,6 +1014,142 @@
     ctx.fillStyle = '#2f6b3a'; ctx.fillRect(x + 2, y, 7, 3.5);
   }
 
+
+  /* The steam-era station's buildings: a red-brick block under a tiled
+     roof, an arched verandah along platform 1 and a clock tower with a
+     pyramid roof; a riveted water tank on its trestle; in the forecourt the
+     name board, black on cream, a couple of Ambassadors and a bullock cart;
+     to the south the signal cabin, the coal stage and the loco shed. */
+  function drawBuildingsRetro(ctx, rnd) {
+    var st = RY.station, p1 = RY.ISLANDS[0], by1 = p1.y0, by0 = 126, i, x, y;
+    var sp = RY.platSpan(p1.lower), bx0 = sp.x0 + 30, bx1 = sp.x1 - 30, cx = (bx0 + bx1) / 2;
+
+    var fy = RY.H - 74;                                       // boundary fence, south
+    ctx.strokeStyle = 'rgba(150,158,150,.35)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(0, fy); ctx.lineTo(RY.W, fy); ctx.moveTo(0, fy + 5); ctx.lineTo(RY.W, fy + 5); ctx.stroke();
+    ctx.fillStyle = 'rgba(58,64,56,.9)';
+    for (x = 0; x < RY.W; x += 26) ctx.fillRect(x, fy - 3, 3, 12);
+
+    // the road, unmetalled, and the forecourt
+    ctx.fillStyle = '#4b4336'; ctx.fillRect(0, 30, RY.W, 34);
+    ctx.strokeStyle = 'rgba(30,24,16,.35)'; ctx.lineWidth = 1.2;                 // cart ruts
+    ctx.beginPath(); ctx.moveTo(0, 40); ctx.lineTo(RY.W, 42); ctx.moveTo(0, 54); ctx.lineTo(RY.W, 53); ctx.stroke();
+    ctx.fillStyle = '#5a5042'; ctx.fillRect(bx0 - 170, 64, bx1 - bx0 + 340, by0 - 64);
+    for (i = 0; i < 14; i++) {                                                   // banyan trees
+      x = 60 + i * 140 + rnd() * 30; y = 14 + rnd() * 8;
+      if (x > bx0 - 190 && x < bx1 + 190) continue;
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(x + 4, y + 6, 20, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = '#34482a'; ctx.beginPath(); ctx.arc(x, y, 20, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = 'rgba(110,140,70,.4)';
+      for (var j = 0; j < 8; j++) { ctx.beginPath(); ctx.arc(x - 10 + rnd() * 18, y - 10 + rnd() * 16, 4 + rnd() * 4, 0, 6.2832); ctx.fill(); }
+    }
+    ambassador(ctx, bx0 - 140, 76, '#e8e0cc'); ambassador(ctx, bx0 - 108, 78, '#1d1e20');
+    ambassador(ctx, bx1 + 70, 80, '#e8e0cc');
+    bullockCart(ctx, bx1 + 120, 72);
+
+    // the name board, black on cream
+    var nw = 400, nh = 34, ny = 66;
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(cx - nw / 2 + 3, ny + 4, nw, nh);
+    ctx.fillStyle = '#2b2b2b'; ctx.fillRect(cx - nw / 2 + 30, ny + nh, 5, 8); ctx.fillRect(cx + nw / 2 - 35, ny + nh, 5, 8);
+    ctx.fillStyle = RT_CREAM; ctx.fillRect(cx - nw / 2, ny, nw, nh);
+    ctx.strokeStyle = RT_INK; ctx.lineWidth = 2; ctx.strokeRect(cx - nw / 2 + 2, ny + 2, nw - 4, nh - 4);
+    ctx.fillStyle = RT_INK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '700 11px "Tamil Sangam MN", "Noto Sans Tamil", sans-serif';
+    ctx.fillText('பழையபுரம் சந்திப்பு', cx, ny + 11);
+    ctx.font = '800 14px Georgia, "Times New Roman", serif';
+    ctx.fillText(st.name.replace(' Junction', ' JN.').toUpperCase(), cx, ny + 25);
+
+    // the water tank on its trestle, west of the building
+    var tx = bx0 - 105, ty = by0 + 40;
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(tx - 24, ty - 20, 54, 50);
+    ctx.fillStyle = '#4b4f52'; ctx.fillRect(tx - 26, ty - 24, 52, 48);
+    ctx.fillStyle = '#5d6266'; ctx.fillRect(tx - 24, ty - 22, 48, 44);
+    ctx.fillStyle = 'rgba(20,22,24,.5)';
+    for (x = tx - 22; x < tx + 24; x += 8) for (y = ty - 20; y < ty + 22; y += 8) ctx.fillRect(x, y, 1.4, 1.4);   // rivets
+    ctx.fillStyle = '#20343a'; ctx.fillRect(tx - 18, ty - 16, 36, 32);                                           // the water
+
+    // the station building: brick walls, a tiled roof, the verandah's arches along the platform
+    ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(bx0 + 5, by0 + 6, bx1 - bx0, by1 - by0);
+    ctx.fillStyle = '#8a3a28'; ctx.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+    ctx.strokeStyle = 'rgba(230,200,170,.18)'; ctx.lineWidth = 0.6;                       // courses of brick
+    ctx.beginPath();
+    for (y = by0 + 3; y < by1; y += 3) { ctx.moveTo(bx0, y); ctx.lineTo(bx0 + 10, y); ctx.moveTo(bx1 - 10, y); ctx.lineTo(bx1, y); }
+    ctx.stroke();
+    var vy = by1 - 22, rx0 = bx0 + 12, rx1 = bx1 - 12, ridge = (by0 + 6 + vy) / 2;
+    [[by0 + 6, ridge, '#6f3326'], [ridge, vy, '#94503a']].forEach(function (sl) {
+      ctx.fillStyle = sl[2]; ctx.fillRect(rx0, sl[0], rx1 - rx0, sl[1] - sl[0]);
+      ctx.strokeStyle = 'rgba(40,14,8,.3)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (y = sl[0] + 4; y < sl[1]; y += 4.5) { ctx.moveTo(rx0, y); ctx.lineTo(rx1, y); }
+      ctx.stroke();
+    });
+    ctx.fillStyle = '#58281d'; ctx.fillRect(rx0, ridge - 1.5, rx1 - rx0, 3);
+    ctx.fillStyle = '#d9cfb6'; ctx.fillRect(bx0, vy, bx1 - bx0, by1 - vy);                // verandah roof, limewashed
+    ctx.fillStyle = '#8a3a28';
+    for (x = bx0 + 6; x < bx1 - 10; x += 22) {                                              // its arches, seen as piers
+      ctx.fillRect(x, by1 - 5, 4, 5);
+      ctx.beginPath(); ctx.arc(x + 13, by1, 8, Math.PI, 0); ctx.fillStyle = 'rgba(40,26,18,.35)'; ctx.fill(); ctx.fillStyle = '#8a3a28';
+    }
+    // the clock tower, with its pyramid roof
+    var tw = 30;
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(cx - tw + 4, ridge - tw + 5, tw * 2, tw * 2);
+    ctx.fillStyle = '#9b4a34'; ctx.fillRect(cx - tw, ridge - tw, tw * 2, tw * 2);
+    [['#7c3a28', [[-1, -1], [1, -1]]], ['#a95b41', [[1, -1], [1, 1]]], ['#b8694e', [[1, 1], [-1, 1]]], ['#8c422f', [[-1, 1], [-1, -1]]]].forEach(function (f) {
+      ctx.fillStyle = f[0];
+      ctx.beginPath(); ctx.moveTo(cx, ridge);
+      ctx.lineTo(cx + f[1][0][0] * (tw - 3), ridge + f[1][0][1] * (tw - 3)); ctx.lineTo(cx + f[1][1][0] * (tw - 3), ridge + f[1][1][1] * (tw - 3));
+      ctx.closePath(); ctx.fill();
+    });
+    ctx.fillStyle = '#c9a44a'; ctx.beginPath(); ctx.arc(cx, ridge, 2.4, 0, 6.2832); ctx.fill();   // finial
+
+    // the signal cabin, its lever frame upstairs
+    ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(88, 906, 116, 60);
+    ctx.fillStyle = '#8a3a28'; ctx.fillRect(84, 902, 116, 60);
+    ctx.fillStyle = '#6f3326'; ctx.fillRect(84, 902, 116, 22);
+    ctx.fillStyle = '#2f3a44'; ctx.fillRect(93, 928, 98, 26);
+    ctx.fillStyle = 'rgba(150,190,225,.35)';
+    for (i = 0; i < 5; i++) ctx.fillRect(98 + i * 18, 931, 13, 20);
+    ctx.fillStyle = '#e8dcc2'; ctx.font = '700 10px ui-monospace, monospace'; ctx.textAlign = 'center';
+    ctx.fillText(st.code + ' CABIN', 142, 980);
+
+    // the coal stage: a raised platform heaped with coal, and its crane
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(266, 934, 230, 40);
+    ctx.fillStyle = '#4a4238'; ctx.fillRect(262, 930, 230, 40);
+    for (i = 0; i < 260; i++) {
+      ctx.fillStyle = ['#161617', '#232325', '#0d0d0e', '#2f3032'][(rnd() * 4) | 0];
+      ctx.beginPath(); ctx.arc(270 + rnd() * 214, 935 + rnd() * 30, 1 + rnd() * 2.2, 0, 6.2832); ctx.fill();
+    }
+    ctx.strokeStyle = '#2a2c2e'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(500, 950); ctx.lineTo(530, 930); ctx.stroke();
+    ctx.fillStyle = '#9aa4b0'; ctx.font = '700 10px ui-monospace, monospace';
+    ctx.fillText('COAL STAGE', 377, 986);
+
+    // the loco shed, its roof blackened with smoke
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(1496, 916, 186, 58);
+    ctx.fillStyle = '#3b3833'; ctx.fillRect(1492, 912, 186, 58);
+    ctx.fillStyle = '#2a2724';
+    for (x = 1492; x < 1678; x += 20) ctx.fillRect(x, 912, 10, 58);
+    ctx.fillStyle = 'rgba(20,18,16,.6)'; ctx.fillRect(1520, 936, 40, 10); ctx.fillRect(1600, 936, 40, 10);   // smoke vents
+    ctx.fillStyle = '#9aa4b0'; ctx.font = '700 10px ui-monospace, monospace';
+    ctx.fillText('LOCO SHED', 1585, 986);
+  }
+  /* An Ambassador from above, and a bullock cart with its pair. */
+  function ambassador(ctx, x, y, c) {
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; RY.rr(ctx, x + 2, y + 2, 16, 30, 6); ctx.fill();
+    ctx.fillStyle = c; RY.rr(ctx, x, y, 16, 30, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(40,60,80,.7)'; RY.rr(ctx, x + 2.5, y + 8, 11, 5, 2); ctx.fill(); RY.rr(ctx, x + 2.5, y + 20, 11, 4, 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(x + 3, y + 14, 10, 5);
+  }
+  function bullockCart(ctx, x, y) {
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(x + 2, y + 16, 18, 22);
+    ctx.fillStyle = '#7a5a36'; ctx.fillRect(x, y + 14, 18, 22);                 // the cart
+    ctx.fillStyle = '#5a3f24'; ctx.fillRect(x - 2, y + 22, 22, 3);               // its axle and wheels
+    ctx.strokeStyle = '#6b4e2e'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + 9, y + 14); ctx.lineTo(x + 9, y + 2); ctx.stroke();   // the pole
+    ['#d9d2c4', '#cfc6b4'].forEach(function (c, n) {                            // the bullocks
+      ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x + 3 + n * 12, y + 2, 4, 7, 0, 0, 6.2832); ctx.fill();
+    });
+  }
   /* ------------- bake everything ------------- */
   /* shown: screen pixels per world unit the scene will be drawn at (the
      map's scale times the device pixel ratio). It's baked at up to twice
@@ -945,14 +1195,15 @@
       drawBlades(ctx, L.xEastHome - oB, L.mainB, T[i].y, -1);
     }
 
-    // OLE over the running lines
-    if (!L.terminus) {
+    // OLE over the running lines — unless the station isn't electrified
+    var wired = RY.station.electric !== false;
+    if (wired && !L.terminus) {
       drawOLE(ctx, RY.makePath([{ x: 0, y: L.mainA }, { x: L.xWestHome + 40, y: L.mainA }]));
       drawOLE(ctx, RY.makePath([{ x: 0, y: L.mainB }, { x: L.xWestHome + 40, y: L.mainB }]));
     }
-    drawOLE(ctx, RY.makePath([{ x: L.xEastHome - 40, y: L.mainA }, { x: RY.W, y: L.mainA }]));
-    drawOLE(ctx, RY.makePath([{ x: L.xEastHome - 40, y: L.mainB }, { x: RY.W, y: L.mainB }]));
-    for (i = 0; i < T.length; i++) {
+    if (wired) drawOLE(ctx, RY.makePath([{ x: L.xEastHome - 40, y: L.mainA }, { x: RY.W, y: L.mainA }]));
+    if (wired) drawOLE(ctx, RY.makePath([{ x: L.xEastHome - 40, y: L.mainB }, { x: RY.W, y: L.mainB }]));
+    for (i = 0; i < T.length && wired; i++) {
       var oleWest = L.terminus ? RY.platSpan(T[i]).x0 : L.xThroatW;
       var road = RY.makePath([{ x: oleWest, y: T[i].y }, { x: L.xThroatE, y: T[i].y }]);
       road.masts = roadMasts(road.len);

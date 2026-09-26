@@ -535,7 +535,7 @@
             if ((tr.dir > 0 && hx >= L.stopX) || (tr.dir < 0 && hx <= L.stopX)) {
               tr.passed = true;
               G.arrivals++;
-              RY.audio.horn(hx, tr.type === 'freight');
+              RY.audio.horn(hx, tr.type === 'freight', tr.vehicles[0].kind === 'steam');
               punctual(G.gameT - tr.sched, 110, tr, 'PASSED');
             }
           }
@@ -559,7 +559,7 @@
           G.throat[ex][slotOf(tr.dir)] = tr; tr.holdsThroat[ex] = true;
           tr.state = 'depart';
           tr.targetS = Infinity;
-          RY.audio.horn(RY.pathAt(tr.path, tr.s).x, tr.type === 'freight');
+          RY.audio.horn(RY.pathAt(tr.path, tr.s).x, tr.type === 'freight', tr.vehicles[0].kind === 'steam');
           punctual(G.gameT - tr.schedDep, 75, tr, 'DEPARTED');
         }
         break;
@@ -705,6 +705,7 @@
 
     checkFullHouse();
     updatePeople(dt);
+    RY.steam.step(dt, G.trains);
     RY.audio.movement(G.trains);
   }
 
@@ -791,7 +792,8 @@
      the back of. The map draws exactly these; the cab reads them. */
   function signalStates() {
     var out = [], i;
-    function sig(x, y, go, dirX) { out.push({ x: x, y: y, aspect: go ? 2 : 0, dirX: dirX }); }
+    // ty: the y of the track the signal stands beside (a semaphore's arm reaches toward it)
+    function sig(x, y, go, dirX, ty) { out.push({ x: x, y: y, aspect: go ? 2 : 0, dirX: dirX, ty: ty }); }
     if (L.terminus) {
       // Both streams share the one throat here, so both signal heads
       // stand at the same x (xEastHome) — one for arrivals off the
@@ -799,8 +801,8 @@
       // way (G.throat.E.neg) — offset in y exactly like a through
       // station's two opposite home signals are.
       var arr = G.throat.E.pos, dep = G.throat.E.neg;
-      sig(L.xEastHome, L.mainB + 42, arr && arr.state === 'routed' && !pastSignal(arr, L.xEastHome), -1);
-      sig(L.xEastHome, L.mainA - 42, dep && dep.state === 'depart' && !pastSignal(dep, L.xEastHome), 1);
+      sig(L.xEastHome, L.mainB + 42, arr && arr.state === 'routed' && !pastSignal(arr, L.xEastHome), -1, L.mainB);
+      sig(L.xEastHome, L.mainA - 42, dep && dep.state === 'depart' && !pastSignal(dep, L.xEastHome), 1, L.mainA);
       for (i = 0; i < T.length; i++) {
         var ot = G.trackOwner[i];
         // Only a real departure gets a starter signal here — an arrival's
@@ -808,7 +810,7 @@
         // (see 'awaitYard' in updateTrain), well before it's this signal's
         // business, exactly like the yard shunt is nobody else's.
         sig(L.xThroatE - 30, T[i].y - 34,
-            ot && ot.dir < 0 && ot.state === 'depart' && !pastSignal(ot, L.xThroatE - 30), 1);
+            ot && ot.dir < 0 && ot.state === 'depart' && !pastSignal(ot, L.xThroatE - 30), 1, T[i].y);
       }
       return out;
     }
@@ -817,8 +819,8 @@
     // so the home signal is exactly this train's clearance, not some other
     // road's, however many services are queued behind it at the signal.
     var wArr = G.throat.W.pos, eArr = G.throat.E.neg;
-    sig(L.xWestHome, L.mainB + 42, wArr && wArr.state === 'routed' && !pastSignal(wArr, L.xWestHome), 1);
-    sig(L.xEastHome, L.mainA - 42, eArr && eArr.state === 'routed' && !pastSignal(eArr, L.xEastHome), -1);
+    sig(L.xWestHome, L.mainB + 42, wArr && wArr.state === 'routed' && !pastSignal(wArr, L.xWestHome), 1, L.mainB);
+    sig(L.xEastHome, L.mainA - 42, eArr && eArr.state === 'routed' && !pastSignal(eArr, L.xEastHome), -1, L.mainA);
     for (i = 0; i < T.length; i++) {
       var o = G.trackOwner[i];
       // A stopping train clears this signal by actually departing; a
@@ -827,14 +829,41 @@
       // by itself clearance, or the signal would read green the moment
       // it's assigned a road, long before it's allowed to cross.
       var ready = o && (o.stops ? o.state === 'depart' : o.gateCleared);
-      sig(L.xThroatE - 30, T[i].y + 34, ready && o.dir > 0 && !pastSignal(o, L.xThroatE - 30), 1);
-      sig(L.xThroatW + 30, T[i].y - 34, ready && o.dir < 0 && !pastSignal(o, L.xThroatW + 30), -1);
+      sig(L.xThroatE - 30, T[i].y + 34, ready && o.dir > 0 && !pastSignal(o, L.xThroatE - 30), 1, T[i].y);
+      sig(L.xThroatW + 30, T[i].y - 34, ready && o.dir < 0 && !pastSignal(o, L.xThroatW + 30), -1, T[i].y);
     }
     return out;
   }
 
   function drawSignals() {
-    signalStates().forEach(function (s) { drawSignal(s.x, s.y, s.aspect, true); });
+    var sem = RY.station.signals === 'semaphore';
+    signalStates().forEach(function (s) {
+      if (sem) drawSemaphore(s); else drawSignal(s.x, s.y, s.aspect, true);
+    });
+  }
+  /* A lower-quadrant semaphore, as the steam-era station has: a post, and
+     an arm reaching out toward the line it governs, red with a white band,
+     level for danger and dropped for clear, and its spectacle lamp glowing
+     red or green once the light goes. */
+  function drawSemaphore(s) {
+    var toward = s.ty !== undefined ? (s.ty > s.y ? 1 : -1) : 1, clear = s.aspect === 2;
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(-2, -1, 6, 6);
+    ctx.fillStyle = '#3b3e42'; ctx.fillRect(-3, -3, 6, 6);                 // the post, from above
+    ctx.fillStyle = '#e8e6e0'; ctx.fillRect(-1.6, -1.6, 3.2, 3.2);
+    ctx.rotate(toward > 0 ? 0 : Math.PI);
+    ctx.rotate(clear ? -0.7 : 0);                                         // dropped to clear
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(3, -2.4, 3.5, 22);
+    ctx.fillStyle = '#c8261e'; ctx.fillRect(-2, 1, 3.4, 20);               // the arm, reaching toward the track
+    ctx.fillStyle = '#f2efe6'; ctx.fillRect(-2, 14, 3.4, 3.2);             // its white band
+    ctx.restore();
+    var lamp = clear ? '70,220,110' : '255,70,50';
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    var g = ctx.createRadialGradient(s.x, s.y, 0.5, s.x, s.y, 14);
+    g.addColorStop(0, 'rgba(' + lamp + ',' + (0.25 + 0.55 * G.night) + ')'); g.addColorStop(1, 'rgba(' + lamp + ',0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(s.x, s.y, 14, 0, 6.2832); ctx.fill();
+    ctx.restore();
   }
 
   function drawPeople() {
@@ -984,6 +1013,7 @@
 
     RY.drawFootbridge(ctx);
     drawSignals();
+    RY.steam.drawMap(ctx);
     drawNight();
 
     ctx.save();
@@ -1354,6 +1384,7 @@
     G.trackOwner = freshTrackOwner();
     G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } };
     RY.cab.reset();
+    RY.steam.reset();
     elBanner.innerHTML = '';
     hint('Select a train, then pick a road.');
     renderBoard(); renderKeys();
@@ -1468,6 +1499,7 @@
     var def = RY.applyStation(selectedStationId);
     RY.bakeScene(shownScale(), view.scale);
     RY.cab.reset();
+    RY.steam.reset();
     renderAkeys();
     document.querySelector('.bname').textContent = def.name.toUpperCase();
     document.title = 'Railyard Dispatcher \u2014 ' + def.name;

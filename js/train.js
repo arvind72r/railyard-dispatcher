@@ -88,6 +88,9 @@
     // a train number where the station's railway numbers them, a code otherwise
     this.code = c.numbers ? String(c.numbers[0] + ((Math.random() * (c.numbers[1] - c.numbers[0] + 1)) | 0))
                           : (c.codePrefix || c.prefix) + (100 + ((Math.random() * 800) | 0));
+    // the old way: a train away from the railway's headquarters runs Down,
+    // one toward it Up — here, east is away from Madras
+    if (c.upDown) this.code += dir > 0 ? ' Dn' : ' Up';
     /* Where it runs between. A service can run real routes (routes: a list
        of [west end, east end], optionally with the train numbers each way,
        and for goods one list per kind of rake — coal from the port to the
@@ -118,13 +121,23 @@
       Object.keys(lvy).forEach(function (k) { cc[k] = lvy[k]; });
       this.cfg = c = cc;
     }
+    // in the steam era, now and then a diesel turns up on the job instead
+    // (dieselShare of the time), in its own livery at the head of the same train
+    if (c.dieselShare && Math.random() < c.dieselShare) {
+      var cd = {};
+      Object.keys(c).forEach(function (k) { cd[k] = c[k]; });
+      cd.haulage = 'diesel'; cd.loco = c.diesel; cd.locoLen = c.dieselLen || 104;
+      this.cfg = c = cd;
+    }
     this.vehicles = [];
     for (i = 0; i < c.cars; i++) {
       if (i === 0 && c.haulage === 'loco')        { kind = 'eloco'; len = c.locoLen; }
       else if (i === 0 && c.haulage === 'diesel') { kind = 'dloco'; len = c.locoLen; }
-      else if (c.haulage === 'diesel')            { kind = 'wagon'; len = c.vehLen; }
-      else if (c.haulage === 'loco')              { kind = 'coach'; len = c.vehLen; }
-      else                                        { kind = 'emu';   len = c.vehLen; }
+      else if (i === 0 && c.haulage === 'steam')  { kind = 'steam'; len = c.locoLen; }
+      else if (c.haulage === 'emu')               { kind = 'emu';   len = c.vehLen; }
+      // what's behind a locomotive: whatever the service says (stock), else
+      // wagons behind a diesel and coaches behind anything else
+      else { kind = c.stock || (c.haulage === 'diesel' ? 'wagon' : 'coach'); len = c.vehLen; }
       var variant = rake && i > 0 ? rake[Math.min(i - 1, rake.length - 1)] : null;
       this.vehicles.push({
         kind: kind, len: len, mid: off + len / 2, idx: i,
@@ -498,6 +511,7 @@
   };
   RY.LAMPS.coach = RY.LAMPS.emu;
   RY.LAMPS.aero = [[-6.2, 11, 2.2, 1], [6.2, 11, 2.2, 1], [0, 16, 1.6, 0]];   // Vande Bharat's pointed nose
+  RY.LAMPS.steam = [[0, 38, 3.2, 0], [-9, 12, 2, 1], [9, 12, 2, 1]];            // a steam engine's big headlamp, and two on the beam
   var LAMP_WHITE = '#fff7d6', LAMP_RED = '#e0402e', LAMP_OFF = '#b9c0c8';
 
   /* A set of lamps on an end at x, from above. mode: 'head', 'tail' or off. */
@@ -736,7 +750,7 @@
     ctx.fillStyle = 'rgba(226,236,248,.13)';
     ctx.fillRect(-BL * 0.32, -HW + 1.6, BL * 0.64, 3.4);
     ctx.fillRect(-BL * 0.32,  HW - 5.0, BL * 0.64, 3.4);
-    ctx.fillStyle = cfg.stripe;
+    ctx.fillStyle = vh.variant === 'first' ? '#e8c21e' : cfg.stripe;   // first class: the old yellow band
     ctx.globalAlpha = 0.92;
     ctx.fillRect(-BL / 2 + 2.5, -HW + 6.4, BL - 5, 1.7);
     ctx.fillRect(-BL / 2 + 2.5,  HW - 8.1, BL - 5, 1.7);
@@ -1024,8 +1038,11 @@
 
   var RENDER = {
     emu: drawEmuCar, coach: drawCoach,
-    eloco: drawElectricLoco, dloco: drawDieselLoco, wagon: drawWagon
+    eloco: drawElectricLoco, dloco: drawDieselLoco, wagon: drawWagon,
+    steam: function (ctx, tr, vh) { RY.drawSteamLoco(ctx, tr, vh); }   // steam.js
   };
+  RY.lampsAt = function (ctx, x, set, mode) { lampsAt(ctx, x, set, mode); };
+  RY.lvMark = function (ctx, x) { lvMark(ctx, x); };
 
   /* ---------------- consist-level drawing ---------------- */
 
@@ -1040,7 +1057,7 @@
       if (cs < 0) continue;
       p = RY.pathAt(tr.path, cs);
       if (p.x < -180 || p.x > RY.W + 180) continue;
-      HW = vh.kind === 'wagon' ? 16 : vh.kind === 'dloco' ? 18.5 : vh.kind === 'eloco' ? 18 : 17;
+      HW = vh.kind === 'wagon' ? 16 : vh.kind === 'dloco' ? 18.5 : vh.kind === 'eloco' ? 18 : vh.kind === 'steam' ? 18 : 17;
       ctx.save();
       ctx.translate(p.x, p.y); ctx.rotate(p.a);
       ctx.fillStyle = 'rgba(0,0,0,.30)';

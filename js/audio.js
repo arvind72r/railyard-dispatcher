@@ -206,11 +206,12 @@
   /* ---------- the horn ---------- */
   /* Two tones a fourth apart with a little detune, a lowpassed sawtooth
      stack for body, and a puff of air noise on the attack. */
-  A.horn = function (x, heavy) {
+  A.horn = function (x, heavy, steam) {
     if (!A.ready || A.muted) return;
     var ctx = A.ctx, t = ctx.currentTime;
     if (t - lastHorn < 1.5) return;                 // don't let it become a chorus
     lastHorn = t;
+    if (steam) { whistle(x, heavy, t); return; }
 
     var dur   = heavy ? 1.15 : 0.6;
     var base  = heavy ? [148, 196] : [370, 494];
@@ -263,4 +264,61 @@
     hs.start(t);
     hs.stop(t + 0.3);
   };
+
+  function panned(x, node) {
+    var pan = A.ctx.createStereoPanner ? A.ctx.createStereoPanner() : null;
+    if (!pan) { node.connect(fxBus); return; }
+    pan.pan.value = Math.max(-0.85, Math.min(0.85, (x / RY.W) * 2 - 1));
+    node.connect(pan).connect(fxBus);
+  }
+
+  /* ---------- steam ---------- */
+  /* A chime whistle: three soft tones of a chord, breathy with steam,
+     swelling in and dying away; a goods engine's pitched lower and held
+     longer. */
+  function whistle(x, heavy, t) {
+    var ctx = A.ctx, dur = heavy ? 1.6 : 0.9;
+    var out = ctx.createGain();
+    panned(x, out);
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(0.2, t + 0.12);
+    out.gain.setTargetAtTime(0.16, t + 0.15, 0.3);
+    out.gain.setTargetAtTime(0.0001, t + dur, 0.14);
+    (heavy ? [330, 415, 494] : [523, 659, 784]).forEach(function (f) {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      o.frequency.setValueAtTime(f * 0.97, t); o.frequency.linearRampToValueAtTime(f, t + 0.15);   // it comes up to pitch
+      g.gain.value = 0.3;
+      o.connect(g).connect(out); o.start(t); o.stop(t + dur + 0.8);
+    });
+    var n = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), ng = ctx.createGain();
+    n.buffer = noiseBuffer(ctx, dur + 0.8, false);
+    bp.type = 'bandpass'; bp.frequency.value = heavy ? 1200 : 2000; bp.Q.value = 1.4;
+    ng.gain.value = 0.35;
+    n.connect(bp).connect(ng).connect(out); n.start(t); n.stop(t + dur + 0.8);
+  }
+
+  /* One exhaust beat: a short, soft chuff of noise, deeper and louder when
+     the engine is working hard, sharper the faster it runs. Beats come four
+     to a turn of the wheels (steam.js), so they quicken with speed; a cap
+     on how many a second keeps a busy station from becoming a roar. */
+  var chuffs = [];
+  A.chuff = function (x, hard, v) {
+    if (!A.ready || A.muted) return;
+    var ctx = A.ctx, t = ctx.currentTime;
+    while (chuffs.length && t - chuffs[0] > 1) chuffs.shift();
+    if (chuffs.length > 14) return;
+    chuffs.push(t);
+    var src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = chuffBuf || (chuffBuf = noiseBuffer(ctx, 0.4, true));
+    bp.type = 'bandpass'; bp.frequency.value = 380 + v * 2.2 - hard * 90; bp.Q.value = 0.9;
+    var peak = 0.05 + 0.13 * hard, len = 0.26 - Math.min(0.14, v * 0.0014);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    src.connect(bp).connect(g);
+    panned(x, g);
+    src.start(t); src.stop(t + len + 0.02);
+  };
+  var chuffBuf = null;
 })(window);
