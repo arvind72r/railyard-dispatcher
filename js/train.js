@@ -61,6 +61,14 @@
     return v;
   }
   RY.shade = shade;
+  /* The same, but as a hex colour, for anything that shades it again. */
+  function shadeHex(h, amt) {
+    var c = rgb(h).map(function (x) {
+      var v = Math.max(0, Math.min(255, amt > 0 ? x + (255 - x) * amt : x * (1 + amt))) | 0;
+      return (v < 16 ? '0' : '') + v.toString(16);
+    });
+    return '#' + c.join('');
+  }
 
   var uid = 1;
   // wagon variants onto the loads drawWagon knows: open (coal), tank,
@@ -70,24 +78,46 @@
   /* =================== the train =================== */
   function Train(typeKey, dir, gameT) {
     var c = RY.serviceCfg(typeKey), i, len, kind, off = 0;
-    var og = (RY.station && RY.station.origins) || { west: ORIGINS_W, east: ORIGINS_E };
     this.id = uid++;
     this.type = typeKey;
     this.cfg = c;
     this.dir = dir;                                   // +1 eastbound, -1 westbound
     this.cars = c.cars;
     this.stops = c.stops;
+    this.seed = (Math.random() * 1e9) | 0;
     // a train number where the station's railway numbers them, a code otherwise
     this.code = c.numbers ? String(c.numbers[0] + ((Math.random() * (c.numbers[1] - c.numbers[0] + 1)) | 0))
                           : (c.codePrefix || c.prefix) + (100 + ((Math.random() * 800) | 0));
-    this.origin = (dir > 0 ? og.west : og.east)[(Math.random() * 5) | 0];
-    this.dest   = (dir > 0 ? og.east : og.west)[(Math.random() * 5) | 0];
-    this.seed = (Math.random() * 1e9) | 0;
+    /* Where it runs between. A service can run real routes (routes: a list
+       of [west end, east end], optionally with the train numbers each way,
+       and for goods one list per kind of rake — coal from the port to the
+       power station, containers to the inland depot); otherwise it picks an
+       end at random from the station's places, each side. */
+    var og = (RY.station && RY.station.origins) || { west: ORIGINS_W, east: ORIGINS_E };
+    var routes = c.rakeRoutes ? c.rakeRoutes[this.seed % c.rakeRoutes.length] : c.routes;
+    if (routes) {
+      var rt = routes[(Math.random() * routes.length) | 0];
+      this.origin = dir > 0 ? rt[0] : rt[1];
+      this.dest   = dir > 0 ? rt[1] : rt[0];
+      if (rt[2]) this.code = String(dir > 0 ? rt[2][0] : rt[2][1]);   // its real numbers, eastbound then westbound
+    } else {
+      var from = dir > 0 ? og.west : og.east, to = dir > 0 ? og.east : og.west;
+      this.origin = from[(Math.random() * from.length) | 0];
+      this.dest   = to[(Math.random() * to.length) | 0];
+    }
 
     /* Build the consist, front to back. A service can say what each vehicle
        behind the locomotive is (rake), or give a choice of whole rakes
        (rakes) — an Indian goods train is one kind of wagon throughout. */
     var rake = c.rakes ? c.rakes[this.seed % c.rakes.length] : c.rake;
+    // a service run in more than one livery (Vande Bharat's white-and-blue
+    // and saffron-and-grey fleets) wears one of them, for this train
+    if (c.liveries) {
+      var lvy = c.liveries[this.seed % c.liveries.length], cc = {};
+      Object.keys(c).forEach(function (k) { cc[k] = c[k]; });
+      Object.keys(lvy).forEach(function (k) { cc[k] = lvy[k]; });
+      this.cfg = c = cc;
+    }
     this.vehicles = [];
     for (i = 0; i < c.cars; i++) {
       if (i === 0 && c.haulage === 'loco')        { kind = 'eloco'; len = c.locoLen; }
@@ -500,7 +530,7 @@
     ctx.lineTo(xe - nose * g.b,  HW - g.bY);
     ctx.lineTo(xe - nose * g.a,  HW - 1.2);
     ctx.closePath();
-    ctx.fillStyle = warning ? '#d2a828' : shade(cfg.body, -0.26);
+    ctx.fillStyle = warning ? '#d2a828' : cfg.noseColor ? shade(cfg.noseColor, -0.06) : shade(cfg.body, -0.26);
     ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.9; ctx.stroke();
 
@@ -565,6 +595,23 @@
 
   /* ---------------- vehicle renderers ---------------- */
 
+
+  /* Two-tone liveries, from above: the side seen past the roof is the upper
+     body, so an upper colour (Rajdhani's cream) fills the inner part of that
+     rim, and a lower one (Vande Bharat's blue or saffron skirt) its outer edge. */
+  function twoTone(ctx, BL, HW, RH, cfg) {
+    if (cfg.upper) {
+      ctx.fillStyle = cfg.upper;
+      ctx.fillRect(-BL / 2 + 3, -HW + 2.6, BL - 6, HW - 2.6 - RH);
+      ctx.fillRect(-BL / 2 + 3,  RH, BL - 6, HW - 2.6 - RH);
+    }
+    if (cfg.lower) {
+      ctx.fillStyle = cfg.lower;
+      ctx.fillRect(-BL / 2 + 2, -HW + 0.3, BL - 4, 2.2);
+      ctx.fillRect(-BL / 2 + 2,  HW - 2.5, BL - 4, 2.2);
+    }
+  }
+
   function drawEmuCar(ctx, tr, vh) {
     var cfg = tr.cfg, BL = vh.len - 10, HW = 17, RH = HW - 8;
 
@@ -572,6 +619,7 @@
     ctx.fillStyle = bodyGradient(ctx, HW, cfg.body);
     rr(ctx, -BL / 2, -HW, BL, HW * 2, 6.5); ctx.fill();
 
+    twoTone(ctx, BL, HW, RH, cfg);
     doors(ctx, BL, HW, cfg.body, [-0.30, -0.06, 0.18, 0.40]);
     if (cfg.windowBand) {                            // one continuous band of dark glass
       ctx.fillStyle = 'rgba(16,22,30,.85)';
@@ -606,7 +654,8 @@
     var lamps = cfg.nose === 'aero' ? RY.LAMPS.aero : RY.LAMPS.emu;
     if (vh.first) cabEnd(ctx, BL, HW, cfg, true, true, false, lamps, cfg.nose);
     if (vh.last)  cabEnd(ctx, BL, HW, cfg, false, true, false, lamps, cfg.nose);    // the train's tail
-    if (vh.last && cfg.lv) lvMark(ctx, -BL / 2 + (cfg.nose === 'aero' ? 30 : 12));
+    // no "X" here: a multiple unit ends in a driving cab, and the X is only
+    // for a last vehicle that isn't one (a coach, a van, a wagon)
     // +x is the leading end: a gangway toward the car ahead unless this is
     // the front car, and toward the car behind unless it's the last —
     // never on a cab end
@@ -679,6 +728,7 @@
     ctx.fillStyle = bodyGradient(ctx, HW, cfg.body);
     rr(ctx, -BL / 2, -HW, BL, HW * 2, 6.5); ctx.fill();
 
+    twoTone(ctx, BL, HW, RH, cfg);
     // vestibule doors at the ends only, the way a mk-anything coach has them
     doors(ctx, BL, HW, cfg.body, [-0.38, 0.38]);
 
@@ -786,8 +836,8 @@
   function drawDieselLoco(ctx, tr, vh) {
     var BL = vh.len - 8, HW = 18.5, RH = HW - 5.5, x;
     // grey hood and a warning-yellow cab, unless the railway has its own livery
-    var lv = tr.cfg.loco, frame = lv ? shade(lv.body, -0.45) : '#3c434b',
-        hoodC = lv ? lv.body : '#5a636c', cabC = lv ? shade(lv.body, 0.06) : '#c9a227';
+    var lv = tr.cfg.loco, frame = lv ? shadeHex(lv.body, -0.45) : '#3c434b',
+        hoodC = lv ? lv.body : '#5a636c', cabC = lv ? lv.body : '#c9a227';   // hex: shade() takes a hex colour
 
     solebar(ctx, BL, HW);
     ctx.fillStyle = bodyGradient(ctx, HW, frame);

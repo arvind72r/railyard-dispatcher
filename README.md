@@ -102,24 +102,46 @@ an Indian Railways station is:
   is laid on concrete sleepers and the ground is dry red earth.
 - **The trains** are the same six kinds of service as everywhere else, with
   the same lengths, speeds and stopping pattern, so the game plays the same.
-  They're numbered the Indian way rather than coded, run between Indian
-  cities, and wear Indian Railways liveries:
+  They're numbered the Indian way rather than coded, run the routes such
+  trains really run through here, and wear Indian Railways liveries:
+  - **MEMU:** short local hops, such as Arakkonam, Katpadi or Chennai Beach
+    to Jolarpettai, Vellore Cantt or Bangarapet.
+  - **Vande Bharat:** Chennai–Mysuru (20607/20608) or Chennai–Coimbatore
+    (20643/20644).
+  - **Superfast:** Chennai–Bengaluru (12607/12608 and 12639/12640),
+    Chennai–Coimbatore (12675/12676) or Chennai–Mangaluru (22637/22638).
+  - **Mail/Express:** Chennai to Mangaluru, Thiruvananthapuram, Mysuru or
+    Erode, each under its own number.
+  - **Rajdhani:** always to or from the national capital, New Delhi ↔
+    Bengaluru (22692/22691).
+  - **Goods:** each route matches the train's wagons: coal from Ennore
+    Port to the Mettur power station, grain from Tondiarpet to Salem,
+    fuel from the Manali refinery to Devangonthi, and containers from
+    Chennai Port to the Whitefield depot.
+
+  The same train number is never on the panel twice at once.
 
 | Service      | Plays as  | Looks like |
 |--------------|-----------|------------|
-| MEMU         | local     | cream with a maroon band and a flat front, 66xxx |
-| Vande Bharat | express   | white with a blue band, a dark window band and a long pointed nose, 20xxx |
-| Superfast    | InterCity | red LHB coaches behind a red WAP-7 electric: a sleeper, two AC coaches and the power car, 12xxx |
-| Mail/Express | sleeper   | blue ICF coaches behind a WAP-7: a luggage-and-guard van at each end, general, sleeper and AC coaches, 16xxx |
-| Goods        | freight   | a blue-and-cream diesel hood unit and one kind of wagon throughout (open wagons of coal, covered vans, black tank wagons or CONCOR containers), with the guard's brake van last |
-| Rajdhani     | non-stop  | deep red and cream LHB coaches behind a WAP-7, with a pantry car and power car |
+| MEMU         | local     | a flat front and a two-tone suburban livery, purple below and white above with a yellow line, 66xxx |
+| Vande Bharat | express   | a long pointed nose and a dark window band, in either of the fleet's liveries: the original white with a blue band and skirt, or the later saffron and grey with a saffron nose, 20xxx |
+| Superfast    | InterCity | LHB coaches in red and grey (silver-grey above, bright red below), behind a red WAP-7 electric: a sleeper, two AC coaches and the power car, 12xxx |
+| Mail/Express | sleeper   | blue ICF coaches behind a blue-and-white WAP-4: a luggage-and-guard van at each end, general, sleeper and AC coaches, 16xxx |
+| Goods        | freight   | a green-and-cream diesel hood unit and one kind of wagon throughout (open wagons of coal, covered vans, black tank wagons or CONCOR containers), with the guard's brake van last |
+| Rajdhani     | non-stop  | Rajdhani's own livery, deep maroon below and cream above with a gold line, on LHB coaches with a pantry car and power car, behind a WAP-7 painted to match |
+
+  In the Train Register each service has its own colour down the edge of
+  its row: red for the Superfast, gold for the Rajdhani, green for goods,
+  blue for the Mail, purple for the MEMU, and white or saffron for a Vande
+  Bharat, matching its livery.
 
   The coaches are told apart the way they are in India. Ordinary coaches
   have barred windows and two rows of round ventilators along the roof. AC
   coaches have wider tinted windows and a roof-mounted unit over each end.
   The LHB power car has louvres instead of windows and a radiator and
-  exhausts on its roof. The last vehicle of every train carries the yellow
-  "X" on its tail, painted on a coach and on a board on the brake van.
+  exhausts on its roof. The last vehicle of every loco-hauled train carries
+  the yellow "X" on its tail, painted on a coach and on a board on the brake
+  van. A MEMU or Vande Bharat ends in a driving cab, so it carries none.
 
   The locomotives wear their own livery rather than the train's, with ends
   to match instead of the warning yellow used elsewhere. All of this shows

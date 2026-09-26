@@ -808,11 +808,20 @@
       if (eye.u < 0 && gangF) bellowsAt(o, hl, 1, k);
       if (eye.u > 0 && gangR) bellowsAt(o, -hl, -1, k);
       if (kind === 'coach') { if (eye.u < 0) buffersAt(o, hl, 1, k); else buffersAt(o, -hl, -1, k); }
-      solid(o, secs, k, paintBody(back));
+      // a nose in its own colour (the saffron Vande Bharat's): the faces
+      // between the nose's own sections, at whichever end has one
+      var nN = noseFn(hw, h).length, nc = cfg.noseColor ? rgbOf(cfg.noseColor) : null, pb = paintBody(nc || back);
+      solid(o, secs, k, !nc ? pb : function (fc) {
+        if (!fc.cap && ((cabF && fc.sec >= 1) || (cabR && fc.sec <= nN - 2))) return fc.edge >= 3 && fc.edge <= 5 ? shadeRgb(nc, -0.1) : nc;
+        return pb(fc);
+      });
 
       // the side we can see
       if (Math.abs(eye.v) > hw) {
         var su0 = -hl + (cabR ? noseLen : 1.5), su1 = hl - (cabF ? noseLen : 1.5);
+        // two-tone liveries: Rajdhani's cream upper half, Vande Bharat's skirt
+        if (cfg.upper) onSide(o, side, hw, su0, su1, 17, 33, col(rgbOf(cfg.upper), k, lit));
+        if (cfg.lower) onSide(o, side, hw, su0, su1, 7.4, 15.5, col(rgbOf(cfg.lower), k, lit));
         onSide(o, side, hw, su0, su1, 12.5, 15, col(stripe, k, lit));
         var doorSpans = [];
         if (kind === 'emu') {
@@ -856,7 +865,8 @@
         onEnd(o, -hl - 0.05, -2.8, 2.8, 7, 10.5, col([30, 32, 36], k, 1));
         endLamps(o, -hl - 0.06, lampSet, lampMode(false, isRear), k);
       }
-      if (isRear && cfg.lv && eye.u < -hl) lvCross(o, -hl - 0.1, cabR ? 5.5 : 9, cabR ? 12 : 14, cabR ? 18 : 30, k);
+      // the "X" only on a last vehicle without a driving cab — never on an EMU's
+      if (isRear && cfg.lv && !cabR && eye.u < -hl) lvCross(o, -hl - 0.1, 9, 14, 30, k);
       // on the roof: an ordinary Indian coach's rows of ventilators, an AC
       // coach's package units at each end, a power car's radiator and exhausts
       if (vv && near_) roofKit(o, hl, h, vv, k);
