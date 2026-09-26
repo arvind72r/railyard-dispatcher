@@ -509,9 +509,9 @@
     dlocoBack: [[-5.5, 27, 2.2, 1], [5.5, 27, 2.2, 1]],                           // on the hood's back end
     wagon: [[-10.5, 11.5, 2.2, 1], [10.5, 11.5, 2.2, 1]]                          // tail lamps on the last wagon
   };
-  RY.LAMPS.coach = RY.LAMPS.emu;
+  RY.LAMPS.coach = [[-12.2, 25, 2.2, 1], [12.2, 25, 2.2, 1]];                  // tail lamps high on a coach's end, clear of its buffers
   RY.LAMPS.aero = [[-6.2, 11, 2.2, 1], [6.2, 11, 2.2, 1], [0, 16, 1.6, 0]];   // Vande Bharat's pointed nose
-  RY.LAMPS.steam = [[0, 38, 3.2, 0], [-9, 12, 2, 1], [9, 12, 2, 1]];            // a steam engine's big headlamp, and two on the beam
+  RY.LAMPS.steam = [[0, 38, 3.2, 0], [-5.5, 14.3, 1.8, 1], [5.5, 14.3, 1.8, 1]];  // a steam engine's big headlamp, and two on the beam
   var LAMP_WHITE = '#fff7d6', LAMP_RED = '#e0402e', LAMP_OFF = '#b9c0c8';
 
   /* A set of lamps on an end at x, from above. mode: 'head', 'tail' or off. */
@@ -527,9 +527,13 @@
   /* shape: 'aero' is Vande Bharat's long pointed nose, 'flat' an Indian
      EMU's flat front; anything else the usual raked cab. In each, a..tip
      are how far back and how far in the outline steps as it narrows, w0/w1
-     where the windscreen runs, lx where the lamps sit. */
+     where the windscreen runs, lx where the lamps sit — all as the cab
+     view builds them (cab.js emuNose/aeroNose/locoNose and windscreen), so
+     from above an end looks like it does from the side. The raked cab's
+     roof runs on to the top of its screen, which slopes down to the end:
+     only a sliver of the front face shows past it. */
   var CAB_SHAPES = {
-    raked: { a: 22, b: 5,  bY: 5.2, tipY: 10,   w0: 21, w1: 10, wy0: 4.4, wy1: 7.6, lx: 2.4 },
+    raked: { a: 1.4, b: 0.6, bY: 2.2, tipY: 3.2, w0: 8.5, w1: 0.8, wy0: 6, wy1: 4, lx: 0.8 },
     aero:  { a: 46, b: 16, bY: 6.5, tipY: 13.5, w0: 40, w1: 25, wy0: 4.2, wy1: 7,   lx: 7   },
     flat:  { a: 9,  b: 3,  bY: 1.8, tipY: 2.6,  w0: 9,  w1: 3.4, wy0: 3.2, wy1: 3.4, lx: 1.6 }
   };
@@ -563,12 +567,11 @@
     wg.addColorStop(1.00, '#16212c');
     ctx.fillStyle = wg; ctx.fill();
     ctx.strokeStyle = 'rgba(8,12,18,.75)'; ctx.lineWidth = 1.2; ctx.stroke();
-    // centre pillar and wipers
-    ctx.strokeStyle = 'rgba(255,255,255,.20)'; ctx.lineWidth = 0.9;
-    var pc = (g.w0 + g.w1) / 2;
-    ctx.beginPath();
-    ctx.moveTo(xe - nose * pc, -HW + 6); ctx.lineTo(xe - nose * pc, HW - 6);
-    ctx.stroke();
+    // a two-pane screen's centre pillar (a loco's, an Indian EMU's), and wipers
+    if (shape === 'flat') {
+      ctx.strokeStyle = 'rgba(10,14,20,.8)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(xe - nose * g.w0, 0); ctx.lineTo(xe - nose * g.w1, 0); ctx.stroke();
+    }
     ctx.strokeStyle = 'rgba(12,16,22,.7)'; ctx.lineWidth = 1;
     for (i = -1; i <= 1; i += 2) {
       ctx.beginPath();
@@ -653,9 +656,10 @@
     rr(ctx, -BL / 2 + 4.5, -RH, BL - 9, RH * 2, 4); ctx.fill();
     roofRibs(ctx, BL - 9, RH, 13);
     weather(ctx, BL - 9, RH);
-    acPod(ctx, -BL * 0.22, 15, 12);
-    acPod(ctx,  BL * 0.20, 15, 12);
-    roofVent(ctx, BL * 0.40);
+    // roof units, but none on Vande Bharat's long sloping nose
+    var aero = cfg.nose === 'aero';
+    if (!(aero && vh.last))  acPod(ctx, -BL * 0.22, 15, 12);
+    if (!(aero && vh.first)) acPod(ctx,  BL * 0.20, 15, 12);
 
     if (cfg.elec && (vh.idx === 1 || (tr.cars > 3 && vh.idx === tr.cars - 2))) {
       ctx.save(); ctx.translate(BL * 0.16, 0);
@@ -724,8 +728,19 @@
   }
   /* The last vehicle of every Indian train carries a big "X" on its tail —
      the guard's and the signalman's proof the train is complete. From
-     above, a yellow board with its cross, at the tail. */
-  function lvMark(ctx, x) {
+     above, at the end it's on, as the cab view has it: a coach's painted
+     straight on its end in yellow; a wagon's or brake van's a yellow board
+     with a black cross. */
+  function lvMark(ctx, x, painted) {
+    if (painted) {
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 3.2;
+      ctx.beginPath(); ctx.moveTo(x - 3.6, -8.4); ctx.lineTo(x + 3.6, 8.4); ctx.moveTo(x + 3.6, -8.4); ctx.lineTo(x - 3.6, 8.4); ctx.stroke();
+      ctx.strokeStyle = '#f2c318'; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.moveTo(x - 3.6, -8.4); ctx.lineTo(x + 3.6, 8.4); ctx.moveTo(x + 3.6, -8.4); ctx.lineTo(x - 3.6, 8.4); ctx.stroke();
+      ctx.lineCap = 'butt';
+      return;
+    }
     ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(x - 4.2, -4, 9, 9);
     ctx.fillStyle = '#f2c318'; ctx.fillRect(x - 4.5, -4.5, 9, 9);
     ctx.strokeStyle = '#15120a'; ctx.lineWidth = 1.6;
@@ -776,9 +791,11 @@
     if (vh.idx > 1) gangway(ctx, BL / 2 + 0.5, 1);
     else buffers(ctx, BL / 2 + 0.5, 1);
     if (vh.last) {
-      cabEnd(ctx, BL, HW, cfg, false, true, false, RY.LAMPS.coach);   // the train's tail
+      // the train's tail: a plain end, no cab, with its tail lamps
+      ctx.fillStyle = shade(cfg.body, -0.26); rr(ctx, -BL / 2, -HW + 2.5, 1.6, HW * 2 - 5, 0.8); ctx.fill();
+      lampsAt(ctx, -BL / 2 - 0.8, RY.LAMPS.coach, 'tail');
       buffers(ctx, -BL / 2 - 0.5, -1);
-      if (cfg.lv) lvMark(ctx, -BL / 2 + 26);
+      if (cfg.lv) lvMark(ctx, -BL / 2 + 4.2, true);
     } else {
       gangway(ctx, -BL / 2 - 0.5, -1);
     }
@@ -841,8 +858,9 @@
 
     specular(ctx, BL, RH);
 
-    cabEnd(ctx, BL, HW, cfg, true,  vh.first, warn, RY.LAMPS.eloco);
-    cabEnd(ctx, BL, HW, cfg, false, vh.last,  warn, RY.LAMPS.eloco);   // coupled to its train: dark
+    // flat-fronted at both ends, as the cab view builds it (cab.js locoNose)
+    cabEnd(ctx, BL, HW, cfg, true,  vh.first, warn, RY.LAMPS.eloco, 'flat');
+    cabEnd(ctx, BL, HW, cfg, false, vh.last,  warn, RY.LAMPS.eloco, 'flat');   // coupled to its train: dark
     buffers(ctx, -BL / 2 - 0.5, -1);
   }
 
@@ -862,21 +880,24 @@
     ctx.fillRect(-BL / 2 + 5, -HW + 1.2, BL - 10, 3.4);
     ctx.fillRect(-BL / 2 + 5,  HW - 4.6, BL - 10, 3.4);
 
-    // the long hood
+    // laid out as the cab view builds it (cab.js drawDiesel): the long hood
+    // from near the rear to the cab, a high cab, then a short, lower nose
+    // tapering to the front
+    var hl = BL / 2, hood0 = -hl + 7, cab0 = BL * 0.12, nose0 = hl - 22, tip = hl - 1, hoodL = cab0 - hood0;
     ctx.fillStyle = 'rgba(0,0,0,.45)';
-    rr(ctx, -BL / 2 + 7, -RH - 0.8, BL * 0.56, RH * 2 + 1.6, 3); ctx.fill();
+    rr(ctx, hood0 + 0.5, -RH - 0.8, hoodL, RH * 2 + 1.6, 3); ctx.fill();
     ctx.fillStyle = roofGradient(ctx, RH, hoodC);
-    rr(ctx, -BL / 2 + 7.5, -RH, BL * 0.56, RH * 2, 3); ctx.fill();
+    rr(ctx, hood0, -RH, hoodL, RH * 2, 3); ctx.fill();
     if (lv) {                                       // the livery's band, down both sides of the hood
       ctx.fillStyle = lv.stripe;
-      ctx.fillRect(-BL / 2 + 8, -RH + 0.4, BL * 0.56 - 1, 1.6);
-      ctx.fillRect(-BL / 2 + 8,  RH - 2.0, BL * 0.56 - 1, 1.6);
+      ctx.fillRect(hood0 + 0.5, -RH + 0.4, hoodL - 1, 1.6);
+      ctx.fillRect(hood0 + 0.5,  RH - 2.0, hoodL - 1, 1.6);
     }
 
-    // radiator grilles along the hood
+    // the radiator, at the hood's far end
     ctx.strokeStyle = 'rgba(18,22,26,.6)'; ctx.lineWidth = 1;
     ctx.beginPath();
-    for (x = -BL / 2 + 13; x < -BL / 2 + BL * 0.5; x += 4.5) {
+    for (x = hood0 + 5; x < hood0 + 22; x += 3) {
       ctx.moveTo(x, -RH + 3); ctx.lineTo(x, RH - 3);
     }
     ctx.stroke();
@@ -906,17 +927,26 @@
     ctx.fillStyle = 'rgba(120,130,140,.45)';
     ctx.beginPath(); ctx.arc(-BL * 0.02, -0.4, 2.4, 0, 6.2832); ctx.fill();
 
-    weather(ctx, BL * 0.56, RH);
+    weather(ctx, hoodL, RH);
 
-    // cab block, warning yellow, toward the leading end
-    ctx.fillStyle = shade(cabC, -0.04);
-    rr(ctx, BL * 0.12, -HW + 1.4, BL * 0.38 - 1, HW * 2 - 2.8, 4); ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,.22)';
-    ctx.fillRect(BL * 0.12, -1.6, BL * 0.38 - 1, 1.4);
-    ctx.fillStyle = 'rgba(255,255,255,.14)';
-    ctx.fillRect(BL * 0.12, -HW + 1.4, BL * 0.38 - 1, 1.6);
-
-    cabEnd(ctx, BL, HW, { body: cabC }, true, vh.first, !lv, RY.LAMPS.dloco);
+    // the nose: lower and narrower than the cab, tapering to the front
+    var noseC = shade(cabC, -0.14);
+    ctx.fillStyle = 'rgba(0,0,0,.4)';
+    ctx.beginPath(); ctx.moveTo(nose0, -16.3); ctx.lineTo(tip - 5, -12.3); ctx.lineTo(tip, -7.5);
+    ctx.lineTo(tip, 9.5); ctx.lineTo(tip - 5, 14.3); ctx.lineTo(nose0, 18.3); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = noseC;
+    ctx.beginPath(); ctx.moveTo(nose0, -17.3); ctx.lineTo(tip - 5, -13.3); ctx.lineTo(tip, -8.5);
+    ctx.lineTo(tip, 8.5); ctx.lineTo(tip - 5, 13.3); ctx.lineTo(nose0, 17.3); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(tip - 1.5, -6.2, 1.2, 12.4);             // the number board
+    // the cab, high, with its roof and the windscreen along its front edge
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; rr(ctx, cab0 + 1, -16.3, nose0 - cab0, 34.6, 3); ctx.fill();
+    ctx.fillStyle = shade(cabC, 0.02); rr(ctx, cab0, -17.3, nose0 - cab0, 34.6, 3); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(cab0, -17.3, nose0 - cab0, 1.6);
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(cab0 + 3, -1, nose0 - cab0 - 6, 2);
+    ctx.fillStyle = '#243240'; ctx.fillRect(nose0 - 2.4, -13, 2.4, 26);                      // windscreen
+    ctx.fillStyle = 'rgba(160,200,230,.35)'; ctx.fillRect(nose0 - 2.4, -12, 1, 11); ctx.fillRect(nose0 - 2.4, 1, 1, 11);
+    lampsAt(ctx, tip + 0.5, RY.LAMPS.dloco, vh.first ? 'head' : '');
+    ctx.fillStyle = '#20252c'; ctx.fillRect(tip, -3.2, 4.5, 6.4);                              // coupler
     buffers(ctx, -BL / 2 - 0.5, -1);
 
     // handrails
@@ -1002,7 +1032,7 @@
       ctx.fillStyle = roofGradient(ctx, HW - 1, cb);
       rr(ctx, -BL * 0.3, -HW + 1, BL * 0.6, HW * 2 - 2, 3); ctx.fill();
       ctx.fillStyle = '#1d2126'; ctx.fillRect(BL * 0.2, -3, 5, 6);          // stove chimney
-      if (vh.last && tr.cfg.lv) lvMark(ctx, -BL / 2 + 5);
+      if (vh.last && tr.cfg.lv) lvMark(ctx, -BL * 0.3 + 4.6);            // on the cabin's end wall
     } else {                                // container flat
       ctx.fillStyle = '#373d44';
       rr(ctx, -BL / 2, -HW, BL, HW * 2, 3); ctx.fill();
@@ -1033,7 +1063,7 @@
     buffers(ctx, -BL / 2 - 0.5, -1);
     buffers(ctx,  BL / 2 + 0.5,  1);
     if (vh.last) lampsAt(ctx, -BL / 2 - 1.5, RY.LAMPS.wagon, 'tail');
-    if (vh.last && tr.cfg.lv && kind !== 4) lvMark(ctx, -BL / 2 + 6);
+    if (vh.last && tr.cfg.lv && kind !== 4) lvMark(ctx, -BL / 2 + 4.6);
   }
 
   var RENDER = {

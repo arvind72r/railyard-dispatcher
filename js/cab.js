@@ -881,20 +881,40 @@
     }
     return q;
   }
-  function wheel3d(o, u, v, r, ang, k, rim, spokes) {
-    var pts = [], i, a, c = col(rim || [70, 72, 76], k, 1), dk = col([20, 20, 22], k, 1), sp = col([120, 124, 128], k, 1);
-    for (i = 0; i < 16; i++) { a = i * 0.3927; pts.push(Vf(o, u + Math.cos(a) * r, v, r + Math.sin(a) * r)); }
-    fillPoly(pts, c);
-    pts = [];
-    for (i = 0; i < 16; i++) { a = i * 0.3927; pts.push(Vf(o, u + Math.cos(a) * r * 0.84, v, r + Math.sin(a) * r * 0.84)); }
-    fillPoly(pts, dk);
-    for (i = 0; i < (spokes || 10); i++) {
-      a = ang + i * 6.2832 / (spokes || 10);
-      line3(o, [u, v, r], [u + Math.cos(a) * r * 0.82, v, r + Math.sin(a) * r * 0.82], sp, 0.55);
+  /* A wheel on the plane v: black, with its tyre painted white as Indian
+     sheds did. style 'boxpok' is the WP's disc driving wheel with its oval
+     lightening holes; anything else is spoked. It turns through ang. */
+  function wheel3d(o, u, v, r, ang, k, style, spokes) {
+    var pts = [], i, j, a;
+    function disc(rr, cu, cz, n) {
+      var q = [];
+      for (j = 0; j < (n || 16); j++) { a = j * 6.2832 / (n || 16); q.push(Vf(o, cu + Math.cos(a) * rr, v, cz + Math.sin(a) * rr)); }
+      return q;
     }
-    pts = [];
-    for (i = 0; i < 8; i++) { a = i * 0.785; pts.push(Vf(o, u + Math.cos(a) * r * 0.2, v, r + Math.sin(a) * r * 0.2)); }
-    fillPoly(pts, sp);
+    fillPoly(disc(r, u, r), col([214, 210, 200], k, 1));                // the white tyre
+    fillPoly(disc(r * 0.9, u, r), col([18, 18, 20], k, 1));             // the wheel
+    if (style === 'boxpok') {
+      for (i = 0; i < 5; i++) {                                          // lightening holes
+        a = ang + i * 1.2566;
+        fillPoly(disc(r * 0.17, u + Math.cos(a) * r * 0.55, r + Math.sin(a) * r * 0.55, 8), col([58, 60, 64], k, 1));
+      }
+      fillPoly(disc(r * 0.26, u, r, 10), col([34, 35, 38], k, 1));      // the boss
+    } else {
+      for (i = 0; i < (spokes || 10); i++) {
+        a = ang + i * 6.2832 / (spokes || 10);
+        line3(o, [u, v, r], [u + Math.cos(a) * r * 0.86, v, r + Math.sin(a) * r * 0.86], col([60, 62, 66], k, 1), 0.6);
+      }
+      fillPoly(disc(r * 0.2, u, r, 8), col([44, 45, 48], k, 1));
+    }
+  }
+  var DOME = [[12, 1, 0], [7.5, 0.95, 0.4], [4.5, 0.82, 1], [2.2, 0.62, 1.6], [0.8, 0.4, 2], [0, 0.22, 2.2]];
+  /* A steam engine's buffers: long stocks with big round silver heads. */
+  function steamBuffers(o, u, k) {
+    [-11, 11].forEach(function (v) {
+      solid(o, boxSecs(u, u + 3, v - 1.6, v + 1.6, 9.8, 13), k, function () { return [30, 31, 34]; });
+      var hd = ringP(3.3, 11.4, 12).map(function (q) { return [q[0] + v, q[1]]; });
+      solid(o, [{ u: u + 3, p: hd }, { u: u + 3.8, p: hd }], k, function (fc) { return fc.cap ? [206, 209, 214] : [120, 124, 130]; });
+    });
   }
   function drawSteam(tr, vh, o, k, eye, side, isFront) {
     var cfg = tr.cfg, e = cfg.engine || {}, g = RY.steamGeo(cfg.steamClass || 'wp', vh.len), hl = g.hl;
@@ -903,59 +923,151 @@
     var near_ = Math.sqrt(eye.u * eye.u + eye.v * eye.v) < 520, u, i;
     var wv = side * 14.6;                                         // the wheels' plane, just outside the frames
 
-    // the tender, and its coal
-    solid(o, boxSecs(-hl, g.tenderFront, -16, 16, 8, 33), k, function (fc) { return fc.cap ? shadeRgb(tender, -0.12) : tender; });
-    solid(o, [{ u: -hl + 5, p: [[-13, 33], [13, 33], [7, 38.5], [-7, 38.5]] }, { u: g.tenderFront - 8, p: [[-13, 33], [13, 33], [7, 39.5], [-7, 39.5]] }], k,
-          function () { return [26, 26, 27]; });
-    // frame, running boards and buffer beam
-    solid(o, boxSecs(g.cabRear - 2, hl - 2, -9, 9, 7, 18), k, function () { return [30, 31, 34]; });
-    solid(o, boxSecs(g.cabRear, hl - 3, -16.5, 16.5, 18, 19.6), k, function (fc) { return fc.edge === 2 ? [70, 72, 76] : [40, 41, 44]; });
-    solid(o, boxSecs(hl - 3, hl, -16, 16, 9, 17.5), k, function () { return rgbOf(e.beam || '#b3261e'); });
-    if (eye.u > 0) buffersAt(o, hl, 1, k);
-    // cylinders, either side at the front
-    [-1, 1].forEach(function (sd) {
-      solid(o, [{ u: g.cyl[0], p: ringP(4.6, g.rD + 1.5, 8).map(function (q) { return [q[0] + sd * 15.6, q[1]]; }) },
-                { u: g.cyl[1], p: ringP(4.6, g.rD + 1.5, 8).map(function (q) { return [q[0] + sd * 15.6, q[1]]; }) }], k,
-            function () { return [44, 45, 48]; });
-    });
-    // the boiler, the smokebox and its nose
-    var bp = ringP(g.rB, g.zB, 12);
-    solid(o, [{ u: g.boilerRear, p: bp }, { u: g.smokeRear, p: bp }], k, function () { return boiler; });
-    var secs = [{ u: g.smokeRear, p: bp }];
-    if (g.bullet) {
-      secs.push({ u: g.nose - 9, p: bp }, { u: g.nose - 4, p: ringP(g.rB * 0.78, g.zB - 1, 12) },
-                { u: g.nose - 1, p: ringP(g.rB * 0.45, g.zB - 2.5, 12) }, { u: g.nose, p: ringP(g.rB * 0.15, g.zB - 3, 12) });
-    } else secs.push({ u: g.nose, p: bp });
-    solid(o, secs, k, function () { return black; });
-    if (g.bullet && eye.u > g.nose - 8) {                         // the silver ring round the nose
-      var ring = ringP(g.rB * 0.62, g.zB - 1.5, 16).map(function (q) { return Vf(o, g.nose - 3.2, q[0], q[1]); });
-      strokeLine(ring.concat([ring[0]]), col([215, 217, 220], k, 1), Math.max(0.5, 0.9 * focal / Math.max(20, ring[0].f)));
+    var beamTop = g.bullet ? 16 : 17.5, boardEnd = g.bullet ? hl - 9 : hl - 3;
+    var lzc = g.zB - 2.2, lu = g.nose - 1, lz = g.zB + g.rB - 0.5;   // headlamps: a WP's in its nose, a WG's on top
+
+    function tenderPart() {
+      // the tender, and its coal
+      solid(o, boxSecs(-hl, g.tenderFront, -16, 16, 8, 33), k, function (fc) { return fc.cap ? shadeRgb(tender, -0.12) : tender; });
+      solid(o, [{ u: -hl + 5, p: [[-13, 33], [13, 33], [7, 38.5], [-7, 38.5]] }, { u: g.tenderFront - 8, p: [[-13, 33], [13, 33], [7, 39.5], [-7, 39.5]] }], k,
+            function () { return [26, 26, 27]; });
     }
-    // boiler bands
-    if (near_ && Math.abs(eye.v) > 4) {
-      [g.boilerRear + 2, (g.boilerRear + g.smokeRear) / 2, g.smokeRear - 2].forEach(function (bu) {
-        var pts = ringP(g.rB + 0.15, g.zB, 12).filter(function (q) { return q[0] * side > -2; }).map(function (q) { return Vf(o, bu, q[0], q[1]); });
-        strokeLine(pts, col(band, k, lit), Math.max(0.5, 0.8 * focal / Math.max(20, pts[0].f)));
+    function framePart() {
+      // frame, running boards and buffer beam. A WP's running board sweeps
+      // down over the cylinders to a lower beam; a WG's runs level to it.
+      function boardC(fc) { return fc.edge === 2 ? [70, 72, 76] : [40, 41, 44]; }
+      solid(o, boxSecs(g.cabRear - 2, hl - 2, -9, 9, 7, 18), k, function () { return [30, 31, 34]; });
+      solid(o, boxSecs(g.cabRear, boardEnd, -16.5, 16.5, 18, 19.6), k, boardC);
+      if (g.bullet) {
+        solid(o, [{ u: boardEnd, p: [[-16.5, 18], [16.5, 18], [16.5, 19.6], [-16.5, 19.6]] },
+                  { u: hl - 3, p: [[-16.5, beamTop - 1.6], [16.5, beamTop - 1.6], [16.5, beamTop], [-16.5, beamTop]] }], k, boardC);
+      }
+      solid(o, boxSecs(hl - 3, hl, -16, 16, g.bullet ? 8.5 : 9, beamTop), k, function () { return rgbOf(e.beam || '#b3261e'); });
+      if (eye.u > hl) {                                             // number and class, in yellow on the beam
+        var yel = col([226, 188, 64], k, lit);
+        for (i = 0; i < 4; i++) onEnd(o, hl + 0.06, -8 + i * 2, -6.8 + i * 2, 10, 11.8, yel);
+        for (i = 0; i < 2; i++) onEnd(o, hl + 0.06, 2.4 + i * 2.2, 3.8 + i * 2.2, 10, 11.8, yel);
+      }
+      // the cowcatcher: a vee of silver slats under the beam
+      solid(o, [{ u: hl - 1, p: [[-14, 1.2], [14, 1.2], [14, 9], [-14, 9]] },
+                { u: hl + 4.5, p: [[-5, 1.2], [5, 1.2], [5, 7.5], [-5, 7.5]] }], k, function () { return [30, 31, 34]; });
+      if (eye.u > hl) {
+        var slat = col([200, 203, 208], k, lit), sw = Math.max(0.5, 0.7 * focal / Math.max(15, Vf(o, hl, 0, 5).f));
+        [2.4, 4.2, 6, 7.8].forEach(function (z) {
+          var zf = Math.min(z, 7.2);
+          strokeLine([Vf(o, hl - 0.9, -14.1, z), Vf(o, hl + 4.6, -5.1, zf), Vf(o, hl + 4.6, 5.1, zf), Vf(o, hl - 0.9, 14.1, z)], slat, sw);
+        });
+      }
+      steamBuffers(o, hl, k);
+      if (Math.abs(eye.v) > 16.5) onSide(o, side, 16.6, g.cabRear, boardEnd, 18.1, 19.2, col([226, 222, 212], k, lit));   // white-lined running board
+      // cylinders, either side at the front
+      [-1, 1].forEach(function (sd) {
+        solid(o, [{ u: g.cyl[0], p: ringP(4.6, g.rD + 1.5, 8).map(function (q) { return [q[0] + sd * 15.6, q[1]]; }) },
+                  { u: g.cyl[1], p: ringP(4.6, g.rD + 1.5, 8).map(function (q) { return [q[0] + sd * 15.6, q[1]]; }) }], k,
+              function () { return [44, 45, 48]; });
       });
     }
-    // chimney, dome, safety valves, headlamp
-    var cz0 = g.zB + g.rB - 1, cz1 = g.zB + g.rB + 6.5, cp = [[-2.4, cz0], [2.4, cz0], [3.4, cz1], [-3.4, cz1]];
-    solid(o, [{ u: g.chimney - 3.4, p: cp }, { u: g.chimney + 3.4, p: cp }], k, function (fc) { return fc.edge === 2 ? [8, 8, 9] : black; });
-    solid(o, [{ u: g.dome - 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }, { u: g.dome + 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }], k,
-          function () { return shadeRgb(boiler, 0.1); });
-    solid(o, boxSecs(g.valve - 1.5, g.valve + 1.5, -3, 3, g.zB + g.rB - 1, g.zB + g.rB + 2.5), k, function () { return [184, 145, 47]; });
-    solid(o, boxSecs(g.nose - 12, g.nose - 7, -2.5, 2.5, g.zB + g.rB - 2, g.zB + g.rB + 3), k, function () { return [150, 156, 162]; });
-    // the cab
-    solid(o, boxSecs(g.cabRear, g.boilerRear, -17, 17, 14, 44), k, function (fc) { return fc.cap ? shadeRgb(cabC, -0.1) : cabC; });
-    solid(o, [{ u: g.cabRear - 1.5, p: [[-18, 44], [18, 44], [14, 47], [-14, 47]] }, { u: g.boilerRear + 1.5, p: [[-18, 44], [18, 44], [14, 47], [-14, 47]] }], k,
-          function () { return [42, 43, 46]; });
-    if (Math.abs(eye.v) > 17) {
-      onSide(o, side, 17, g.cabRear + 3, g.boilerRear - 3, 29, 39, glassStyle(k, lit));
-      onSide(o, side, 17, g.cabRear + 2, g.cabRear + 5, 14, 29, col([10, 10, 11], k, lit));   // the cab's open side
+    function boilerPart() {
+      // the boiler, the smokebox and its nose
+      var bp = ringP(g.rB, g.zB, 16), silver = col([214, 217, 220], k, 1), j;
+      solid(o, [{ u: g.boilerRear, p: bp }, { u: g.smokeRear, p: bp }], k, function () { return boiler; });
+      var noseC = e.nose ? rgbOf(e.nose) : black, secs = [{ u: g.smokeRear, p: bp }];
+      if (g.bullet) {
+        // the WP's bullet nose: the smokebox rounds forward into a dome, its
+        // headlamp in the middle; [back from the nose, radius, drop]
+        DOME.forEach(function (d) { secs.push({ u: g.nose - d[0], p: ringP(g.rB * d[1], g.zB - d[2], 16) }); });
+      } else secs.push({ u: g.nose, p: bp });
+      solid(o, secs, k, function (fc) { return g.bullet && (fc.cap || fc.sec >= 1) ? noseC : black; });
+      var w0 = Math.max(0.5, 0.8 * focal / Math.max(15, Vf(o, g.nose, 0, g.zB).f));
+      if (g.bullet && eye.u > g.nose - 8) {
+        // the star: eight rays from the lamp out across the dome, silver on
+        // black (or black on a silver nose), each drawn only if it faces us
+        var rayC = e.nose ? col([22, 23, 25], k, 1) : silver;
+        for (j = 0; j < 8; j++) {
+          var th = j * 0.7854 + 1.5708, L = [], R = [], d, t, w, rr3, zc, uu;
+          for (d = DOME.length - 1; d >= 1; d--) {
+            t = (DOME.length - 1 - d) / (DOME.length - 2); w = 0.36 * (1 - t) + 0.002;
+            rr3 = g.rB * DOME[d][1] + 0.12; zc = g.zB - DOME[d][2]; uu = g.nose - DOME[d][0] + 0.05;
+            L.push(Vf(o, uu, Math.cos(th - w) * rr3, zc + Math.sin(th - w) * rr3));
+            R.unshift(Vf(o, uu, Math.cos(th + w) * rr3, zc + Math.sin(th + w) * rr3));
+          }
+          var mr = g.rB * DOME[3][1], mz = g.zB - DOME[3][2], mu = g.nose - DOME[3][0], ny = Math.cos(th), nz = Math.sin(th);
+          if (1.4 * (eye.u - mu) + ny * (eye.v - ny * mr) + nz * (EYE - mz - nz * mr) > 0) fillPoly(L.concat(R), rayC);
+        }
+      }
+      if (g.bullet) {
+        solid(o, [{ u: g.nose - 1, p: ringP(2.8, lzc, 12) }, { u: g.nose + 2.6, p: ringP(2.8, lzc, 12) }], k,
+              function (fc) { return fc.cap ? [40, 42, 45] : [178, 182, 188]; });
+      } else if (eye.u > g.nose) {
+        // a WG's flat smokebox door, graphite grey, rivets round its rim and
+        // the shed's emblem in the middle
+        var du = g.nose + 0.08, dr = g.rB * 0.86;
+        var disc = function (r, n, uu) { return ringP(r, g.zB, n).map(function (q) { return Vf(o, uu, q[0], q[1]); }); };
+        var dd = disc(dr, 24, du);
+        fillPoly(dd, col([128, 130, 134], k, lit));
+        strokeLine(dd.concat([dd[0]]), col([62, 64, 68], k, lit), w0);
+        if (w0 > 1.2) {
+          for (j = 0; j < 16; j++) {
+            var ra = j * 0.3927, rv = Math.cos(ra) * dr * 0.88, rz = g.zB + Math.sin(ra) * dr * 0.88;
+            onEnd(o, du + 0.02, rv - 0.3, rv + 0.3, rz - 0.3, rz + 0.3, col([178, 180, 184], k, lit));
+          }
+        }
+        fillPoly(disc(dr * 0.36, 16, du + 0.04), col([24, 25, 27], k, 1));
+        var em = disc(dr * 0.22, 12, du + 0.06);
+        strokeLine(em.concat([em[0]]), col([216, 212, 196], k, 1), w0 * 0.8);
+        line3(o, [du + 0.1, dr * 0.42, g.zB], [du + 0.1, dr * 0.72, g.zB], silver, 0.6);        // the door's handle
+      }
+      if (!g.bullet) {                                              // the name board, under the door
+        solid(o, boxSecs(hl - 3.4, hl - 2, -9, 9, beamTop, beamTop + 3.6), k, function () { return [22, 23, 25]; });
+        if (eye.u > hl - 2) for (i = 0; i < 6; i++) onEnd(o, hl - 1.94, -7 + i * 2.4, -5.6 + i * 2.4, beamTop + 1, beamTop + 2.6, col([226, 188, 64], k, lit));
+      }
+      // handrails: from the beam's corners up round the smokebox, then along the boiler
+      var rail = col([200, 203, 208], k, lit);
+      [-1, 1].forEach(function (sd) {
+        if (sd !== side && eye.u < g.nose - 4) return;
+        var up = g.bullet ? [[hl - 2.5, 15, beamTop], [hl - 4, 14.6, beamTop + 5], [g.nose - 4.5, g.rB * 0.82 + 1.2, g.zB], [g.nose - 9, g.rB + 1, g.zB + 2]]
+                          : [[hl - 2.5, 15, beamTop], [hl - 3, 14.8, beamTop + 3], [g.nose - 0.6, g.rB + 0.9, g.zB - 1], [g.nose - 3, g.rB + 0.9, g.zB + 2]];
+        if (sd === side) up.push([g.boilerRear + 2, g.rB + 0.9, g.zB + 2]); else up.length = 3;
+        strokeLine(up.map(function (q) { return Vf(o, q[0], sd * q[1], q[2]); }), rail, w0 * 0.5);
+      });
+      // boiler bands
+      if (near_ && Math.abs(eye.v) > 4) {
+        [g.boilerRear + 2, (g.boilerRear + g.smokeRear) / 2, g.smokeRear - 2].forEach(function (bu) {
+          var pts = ringP(g.rB + 0.15, g.zB, 12).filter(function (q) { return q[0] * side > -2; }).map(function (q) { return Vf(o, bu, q[0], q[1]); });
+          strokeLine(pts, col(band, k, lit), Math.max(0.5, 0.8 * focal / Math.max(20, pts[0].f)));
+        });
+      }
+      // chimney, dome, safety valves, headlamp
+      var cz0 = g.zB + g.rB - 1, cz1 = g.zB + g.rB + g.chimH, cp = [[-2.6, cz0], [2.6, cz0], [3.2, cz1], [-3.2, cz1]];
+      solid(o, [{ u: g.chimney - 3.4, p: cp }, { u: g.chimney + 3.4, p: cp }], k, function (fc) { return fc.edge === 2 ? [8, 8, 9] : black; });
+      solid(o, [{ u: g.dome - 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }, { u: g.dome + 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }], k,
+            function () { return shadeRgb(boiler, 0.1); });
+      solid(o, boxSecs(g.valve - 1.5, g.valve + 1.5, -3, 3, g.zB + g.rB - 1, g.zB + g.rB + 2.5), k, function () { return [184, 145, 47]; });
+      if (!g.bullet) solid(o, [{ u: lu - 5, p: ringP(3.2, lz + 3.4, 10, lz) }, { u: lu, p: ringP(3.2, lz + 3.4, 10, lz) }], k, function () { return [38, 40, 43]; });
     }
+    function cabPart() {
+      // the cab
+      solid(o, boxSecs(g.cabRear, g.boilerRear, -17, 17, 14, 44), k, function (fc) { return fc.cap ? shadeRgb(cabC, -0.1) : cabC; });
+      solid(o, [{ u: g.cabRear - 1.5, p: [[-18, 44], [18, 44], [14, 47], [-14, 47]] }, { u: g.boilerRear + 1.5, p: [[-18, 44], [18, 44], [14, 47], [-14, 47]] }], k,
+            function () { return [42, 43, 46]; });
+      if (eye.u > g.boilerRear) [-1, 1].forEach(function (sd) {     // the spectacle windows either side of the boiler
+        onEnd(o, g.boilerRear + 0.08, sd * 11.2, sd * 15.6, 33, 40, glassStyle(k, lit));
+      });
+      if (Math.abs(eye.v) > 17) {
+        onSide(o, side, 17, g.cabRear + 5, g.boilerRear - 5, 21, 25, col([182, 142, 58], k, lit));   // the brass number plate
+        onSide(o, side, 17, g.cabRear + 3, g.boilerRear - 3, 29, 39, glassStyle(k, lit));
+        onSide(o, side, 17, g.cabRear + 2, g.cabRear + 5, 14, 29, col([10, 10, 11], k, lit));   // the cab's open side
+      }
+    }
+    // solids paint in the order drawn, so the far parts go first: seen
+    // from ahead, the tender and cab lie behind the boiler; from behind,
+    // in front of it
+    if (eye.u > (g.cabRear + g.boilerRear) / 2) { tenderPart(); cabPart(); framePart(); boilerPart(); }
+    else { framePart(); boilerPart(); cabPart(); tenderPart(); }
     // the lamps: headlamp over the nose, markers on the buffer beam
     if (eye.u > hl - 3) endLamps(o, hl + 0.1, RY.LAMPS.steam.slice(1), lampMode(isFront, false), k);
-    if (eye.u > g.nose - 8) endLamps(o, g.nose - 6.8, RY.LAMPS.steam.slice(0, 1), lampMode(isFront, false), k);
+    if (g.bullet) { if (eye.u > g.nose + 2.6) endLamps(o, g.nose + 2.7, [[0, lzc, 3.4, 0]], lampMode(isFront, false), k); }
+    else if (eye.u > lu) endLamps(o, lu + 0.08, [[0, lz + 3.4, 4.4, 0]], lampMode(isFront, false), k);
 
     // the running gear, on the side we can see
     if (!near_ || Math.abs(eye.v) < 10) return;
@@ -963,9 +1075,9 @@
     g.lead.forEach(function (lu) { wheel3d(o, lu, wv, g.rLead, a * g.rD / g.rLead, k, null, 8); });
     g.trail.forEach(function (tu) { wheel3d(o, tu, wv, g.rTrail, a * g.rD / g.rTrail, k, null, 8); });
     for (i = 0; i < 2; i++) {                                     // the tender's bogies
-      [-8, 0, 8].forEach(function (d) { wheel3d(o, g.tender[i] + d, side * 13.6, g.rT, a * g.rD / g.rT, k, null, 6); });
+      [-8, 0, 8].forEach(function (d) { wheel3d(o, g.tender[i] + d, side * 13.6, g.rT, a * g.rD / g.rT, k, null, 8); });
     }
-    g.drivers.forEach(function (du) { wheel3d(o, du, wv, g.rD, a, k, [150, 30, 26], 14); });   // drivers, rims in red
+    g.drivers.forEach(function (du) { wheel3d(o, du, wv, g.rD, a, k, g.bullet ? 'boxpok' : null, 16); });   // the drivers
     var steel = col([196, 200, 206], k, 1), dark = col([90, 94, 100], k, 1);
     var pins = g.drivers.map(function (du) { return [du + g.rc * Math.cos(a), rodV, g.rD + g.rc * Math.sin(a)]; });
     line3(o, pins[0], pins[pins.length - 1], steel, 1.5);                                    // coupling rod
@@ -994,7 +1106,7 @@
     });
     solid(o, [{ u: g.dome - 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }, { u: g.dome + 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }], 0,
           function () { return shadeRgb(boiler, 0.1); });
-    solid(o, boxSecs(g.chimney - 3, g.chimney + 3, -3, 3, g.zB + g.rB - 1, g.zB + g.rB + 6.5), 0, function () { return [10, 10, 11]; });
+    solid(o, boxSecs(g.chimney - 3, g.chimney + 3, -3, 3, g.zB + g.rB - 1, g.zB + g.rB + g.chimH), 0, function () { return [10, 10, 11]; });
   }
 
   function drawVehicle(tr, vh, o, k, isFront, isRear) {
@@ -1091,7 +1203,7 @@
       if (isRear && cfg.lv && !cabR && eye.u < -hl) lvCross(o, -hl - 0.1, 9, 14, 30, k);
       // on the roof: an ordinary Indian coach's rows of ventilators, an AC
       // coach's package units at each end, a power car's radiator and exhausts
-      if (vv && near_) roofKit(o, hl, h, vv, k);
+      if (near_) roofKit(o, hl, h, kind === 'emu' ? 'emu' : vv || 'coach', k, cabF && cfg.nose === 'aero', cabR && cfg.nose === 'aero');
       if (!cabR && isRear && eye.u < -hl) endLamps(o, -hl - 0.06, RY.LAMPS[kind], 'tail', k);
       // and whatever sticks out of the near end, in front of it
       if (eye.u >= 0 && gangF) bellowsAt(o, hl, 1, k);
@@ -1214,8 +1326,20 @@
     fillPoly([Vf(o, u, -w, z0), Vf(o, u, -w + t, z0), Vf(o, u, w, z1), Vf(o, u, w - t, z1)], c);
     fillPoly([Vf(o, u, w, z0), Vf(o, u, w - t, z0), Vf(o, u, -w, z1), Vf(o, u, -w + t, z1)], c);
   }
-  function roofKit(o, hl, h, v, k) {
+  function roofKit(o, hl, h, v, k, noF, noR) {
     var u, g = [150, 155, 160];
+    if (v === 'emu' || v === 'coach') {
+      // a multiple unit's air-conditioning units, or a coach's one amidships
+      // and its two vents, where the map (train.js) draws them
+      (v === 'emu' ? [noR ? null : -hl * 0.44, noF ? null : hl * 0.4] : [0]).forEach(function (c) {
+        if (c === null) return;
+        solid(o, boxSecs(c - 7.5, c + 7.5, -6, 6, h - 0.5, h + 3), k, function (fc) { return fc.edge === 2 ? [105, 114, 124] : [73, 81, 90]; });
+      });
+      if (v === 'coach') [-hl * 0.6, hl * 0.6].forEach(function (c) {
+        solid(o, boxSecs(c - 2.6, c + 2.6, -2.6, 2.6, h - 0.3, h + 1.8), k, function (fc) { return fc.edge === 2 ? [93, 102, 111] : [61, 68, 76]; });
+      });
+      return;
+    }
     if (v === 'power') {
       solid(o, boxSecs(-hl * 0.44, hl * 0.44, -7, 7, h - 0.5, h + 2), k, function (fc) { return fc.edge === 2 ? [40, 44, 49] : [70, 75, 82]; });
       [-hl * 0.68, hl * 0.68].forEach(function (eu) {
