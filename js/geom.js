@@ -178,10 +178,10 @@
         express:   { label: 'Vande Bharat', numbers: [20601, 20699], nose: 'aero', windowBand: true,
                      // the two that run this line
                      routes: [['Chennai', 'Mysuru', [20607, 20608]], ['Chennai', 'Coimbatore', [20643, 20644]]],
-                     body: '#f4f5f7', roof: '#c3c8ce', stripe: '#1d4f9f',
+                     body: '#ffffff', roof: '#eceef1', stripe: '#1d4f9f',
                      // the fleet runs in both: the original white with a blue band
                      // and skirt, and the saffron-and-grey of the later rakes
-                     liveries: [{ body: '#f4f5f7', roof: '#c3c8ce', stripe: '#1d4f9f', lower: '#1d4f9f', tag: '#eef1f4' },
+                     liveries: [{ body: '#ffffff', roof: '#eceef1', stripe: '#1d4f9f', lower: '#1d4f9f', noseColor: '#fbfcfd', tag: '#eef1f4' },
                                 { body: '#aeb4ba', roof: '#8f969d', stripe: '#f07b1c', lower: '#f07b1c', noseColor: '#f07b1c', tag: '#f28a2e' }] },
         intercity: { label: 'Superfast', numbers: [12601, 12699], loco: 'wap7', lv: true,
                      routes: [['Chennai', 'Bengaluru', [12607, 12608]], ['Chennai', 'Bengaluru', [12639, 12640]],
