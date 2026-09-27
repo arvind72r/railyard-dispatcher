@@ -129,7 +129,7 @@ an Indian Railways station is:
 | Superfast    | InterCity | LHB coaches in red and grey (silver-grey above, bright red below), behind a red WAP-7 electric: a sleeper, two AC coaches and the power car, 12xxx |
 | Mail/Express | sleeper   | blue ICF coaches behind a blue-and-white WAP-4: a luggage-and-guard van at each end, general, sleeper and AC coaches, 16xxx |
 | Goods        | freight   | a green-and-cream diesel hood unit and one kind of wagon throughout (open wagons of coal, covered vans, black tank wagons or CONCOR containers), with the guard's brake van last |
-| Rajdhani     | non-stop  | Rajdhani's own livery, deep maroon below and cream above with a gold line, on LHB coaches with a pantry car and power car, behind a WAP-7 painted to match |
+| Rajdhani     | non-stop  | Rajdhani's own livery, deep maroon below and cream above with a gold line, on LHB coaches with a pantry car and power car, behind a cream WAP-7 with a maroon band, so it never looks like the red Superfast engine |
 
   In the Train Register each service has its own colour down the edge of
   its row: red for the Superfast, gold for the Rajdhani, green for goods,
