@@ -217,7 +217,7 @@
       },
       locos: {
         wap7: { body: '#b8282b', stripe: '#f1ebe0', roof: '#8a9096' },     // electric, red with a cream band
-        wap7raj: { body: '#e9dcbc', stripe: '#7a1520', roof: '#8a9096' },  // the Rajdhani's: cream with a maroon band, unmistakable beside the red
+        wap7raj: { body: '#d9ab35', stripe: '#7a1520', roof: '#8a9096' },  // the Rajdhani's: gold with a maroon band, its register colour, unlike any other engine here
         wap4: { body: '#2f78c4', stripe: '#f4f2ec', roof: '#7e868e' },     // the Mail's WAP-4, blue with white bands
         wdg4: { body: '#2f7a45', stripe: '#ece6d6', roof: '#6f767e' }      // diesel hood unit, green and cream — goods' colour
       }
