@@ -148,7 +148,7 @@
         { short: 'S1',  name: 'Siding 1',   maxCars: 8, platform: false },
         { short: 'S2',  name: 'Siding 2',   maxCars: 8, platform: false },
         { short: 'PF4', name: 'Platform 4', maxCars: 5, platform: true  },
-        { short: 'PF5', name: 'Platform 5', maxCars: 5, platform: true  },
+        { short: 'PF5', name: 'Platform 5', maxCars: 6, platform: true  },
         { short: 'PF6', name: 'Platform 6', maxCars: 4, platform: true  }
       ],
       islands: [[0], [1, 2], [5, 6], [7]],
