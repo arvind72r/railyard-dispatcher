@@ -260,16 +260,22 @@
       w.solids.push({ kind: 'stair', c: rect(L.stopX - 55, midY - 20, L.stopX - 17, midY + 20), z0: PLAT_H, z1: 60 });
     });
 
-    // the footbridge, side platform to side platform
-    var fy0 = RY.ISLANDS[0].y0 + 6, fy1 = RY.ISLANDS[RY.ISLANDS.length - 1].y1 - 6, y, yb;
+    // the footbridge, from the building out to the last platform
+    var fr = RY.frontage();
+    var fy0 = fr.y + 6, fy1 = RY.ISLANDS[RY.ISLANDS.length - 1].y1 - 6, y, yb;
     for (y = fy0; y < fy1; y = yb) {
       yb = Math.min(fy1, y + 40);
       w.solids.push({ kind: 'bridge', c: rect(L.stopX - 14, y, L.stopX + 14, yb), z0: 60, z1: 70 });
     }
+    // the concourse in front of the building, where road 1 is a goods line
+    if (fr.concourse) {
+      w.solids.push({ kind: 'plat', c: rect(fr.sp.x0 - 20, fr.y, fr.sp.x1 + 20, fr.deck), z0: 0, z1: 3, edgeT: false, edgeB: false,
+                      top: IN_PLAT, side: IN_PLATSIDE, tac: [3, 9] });
+    }
 
     // the station building (scene.js drawBuildingsIndia lays it out the same way)
-    var p1 = RY.ISLANDS[0], sp1 = RY.platSpan(p1.lower), bx0 = sp1.x0 + 38, bx1 = sp1.x1 - 38, cx = (bx0 + bx1) / 2;
-    var by0 = 120, by1 = p1.y0, ridge = (by0 + 6 + by1 - 6) / 2, rw = (by1 - by0) / 2 - 6;
+    var sp1 = fr.sp, bx0 = sp1.x0 + 38, bx1 = sp1.x1 - 38, cx = (bx0 + bx1) / 2;
+    var by0 = 120, by1 = fr.y, ridge = (by0 + 6 + by1 - 6) / 2, rw = (by1 - by0) / 2 - 6;
     w.solids.push({ kind: 'box', rgb: IN_WALL, top: IN_WALL, c: rect(bx0, by0, bx1, by1), z0: 0, z1: 44 });
     prism(w, bx0 + 34, bx1 - 34, ridge, [[-rw, 44], [rw, 44], [rw, 46], [0, 64], [-rw, 46]], [IN_ROOF, [150, 76, 52], [120, 60, 42]]);
     w.solids.push({ kind: 'box', rgb: [232, 219, 186], top: [232, 219, 186], c: rect(cx - 32, ridge - 32, cx + 32, ridge + 32), z0: 0, z1: 84 });
@@ -1750,10 +1756,10 @@
     var out = [], L = RY.LAY;
     function add(x0, y0, x1, y1) { out.push([x0, y0, x1, y1]); }
     if (RY.station.style === 'india' || RY.station.style === 'retro') {
-      // the name board in the forecourt, the station building and platform 1 along its front
-      var sp1 = RY.platSpan(RY.ISLANDS[0].lower), cx = (sp1.x0 + sp1.x1) / 2;
+      // the name board in the forecourt, the station building and what's along its front
+      var fr = RY.frontage(), sp1 = fr.sp, cx = (sp1.x0 + sp1.x1) / 2;
       add(cx - 222, 60, cx + 222, 104);
-      add(sp1.x0 + 36, 104, sp1.x1 - 36, RY.ISLANDS[0].y1);
+      add(sp1.x0 + 36, 104, sp1.x1 - 36, fr.deck);
     } else add(650, 40, 1266, 176);   // the concourse and its entrance canopy (scene.js)
     RY.buildTrackwork().forEach(function (P) {
       for (var k = 1; k < P.pts.length; k++) {

@@ -648,6 +648,11 @@
     var below = t.y > (topY + botY) / 2;
     var margin = below ? Math.min(48, botY - t.y - 12) : Math.min(48, t.y - topY - 12);
     var y = below ? t.y + margin : t.y - margin, x, i;
+    // where the station's concourse lies along the outside of this road (an
+    // Indian goods line 1, RY.frontage), the sign goes on its inside instead,
+    // between it and the next road in
+    var fr = (india() || retro()) && RY.frontage(), nb = T[T.indexOf(t) + (below ? -1 : 1)];
+    if (fr && fr.concourse && !below && y < fr.deck + 12 && nb) y = (t.y + nb.y) / 2;
     // hatched no-platform strip beside the road
     ctx.save();
     ctx.beginPath(); ctx.rect(L.xThroatW + 40, y - 9, L.xThroatE - L.xThroatW - 80, 18);
@@ -699,7 +704,7 @@
      trains by the live renderer, since it passes above them. */
   RY.drawFootbridge = function (ctx) {
     var bx = L.stopX, y0 = 268, y1 = 884, i, y, k;   // starts clear of the lineside signs
-    if (india() || retro()) { y0 = RY.ISLANDS[0].y0 + 6; y1 = RY.ISLANDS[RY.ISLANDS.length - 1].y1 - 6; }   // side platform to side platform
+    if (india() || retro()) { y0 = RY.frontage().y + 6; y1 = RY.ISLANDS[RY.ISLANDS.length - 1].y1 - 6; }   // from the building out to the last platform
     ctx.save();
     ctx.globalAlpha = 0.88;               // let the stock read through it
     ctx.fillStyle = 'rgba(0,0,0,.4)';
@@ -885,16 +890,34 @@
   }
 
 
-  /* The Indian station's buildings. Platform 1 runs along the front of the
-     station building, which sits on the side platform's back edge rather
-     than behind a fence: a long block under a terracotta-tiled roof with a
+  /* The Indian station's buildings. The station building fronts on platform
+     1 or, where road 1 is a goods line, on a strip of concourse behind it
+     (RY.frontage): a long block under a terracotta-tiled roof with a
      domed clock tower over the entrance. On the town side, a forecourt with
      the big black-on-yellow name board — Tamil, Hindi and English — auto-
      rickshaws waiting in rank, neem trees and the station's overhead water
      tank; along the south cess, the cabin and stacks of concrete sleepers. */
   function drawBuildingsIndia(ctx, rnd) {
-    var st = RY.station, p1 = RY.ISLANDS[0], by1 = p1.y0, by0 = 120, i, x, y;
-    var sp = RY.platSpan(p1.lower), bx0 = sp.x0 + 38, bx1 = sp.x1 - 38, cx = (bx0 + bx1) / 2;
+    var st = RY.station, fr = RY.frontage(), by1 = fr.y, by0 = 120, i, x, y;
+    var sp = fr.sp, bx0 = sp.x0 + 38, bx1 = sp.x1 - 38, cx = (bx0 + bx1) / 2;
+
+    // the concourse in front of the building, where road 1 is a goods line:
+    // tiled, railed off from the line, with the station's name boards on it
+    if (fr.concourse) {
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(sp.x0 - 20, by1 + 2, sp.len + 40, fr.deck - by1);
+      ctx.fillStyle = '#b8aa8c'; ctx.fillRect(sp.x0 - 20, by1, sp.len + 40, fr.deck - by1);
+      ctx.strokeStyle = 'rgba(90,78,58,.28)'; ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      for (x = sp.x0 - 20; x < sp.x1 + 20; x += 12) { ctx.moveTo(x, by1); ctx.lineTo(x, fr.deck); }
+      for (y = by1 + 12; y < fr.deck; y += 12) { ctx.moveTo(sp.x0 - 20, y); ctx.lineTo(sp.x1 + 20, y); }
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(70,74,70,.9)'; ctx.lineWidth = 1.6;            // the railing along the goods line
+      ctx.beginPath(); ctx.moveTo(sp.x0 - 20, fr.deck - 1.5); ctx.lineTo(sp.x1 + 20, fr.deck - 1.5); ctx.stroke();
+      ctx.fillStyle = 'rgba(40,44,40,.9)';
+      for (x = sp.x0 - 18; x < sp.x1 + 20; x += 16) ctx.fillRect(x, fr.deck - 3, 2, 3);
+      var nm = st.name.replace(' Junction', ' JN.').toUpperCase();
+      [sp.x0 + 170, sp.x1 - 170].forEach(function (nx) { signPlate(ctx, nx, (by1 + fr.deck) / 2 + 4, nm, IN_YELLOW, IN_INK); });
+    }
 
     // boundary fence along the south only
     var fy = RY.H - 74;
