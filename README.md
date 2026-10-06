@@ -19,7 +19,7 @@ into islands are all different:
 | Northgate Junction    | Advanced  | 7     | One through road, three islands — busy.       |
 | Northgate Junction (Realistic) | Advanced | 7 | The same roads, through a throat laid like a real one. |
 | Selby Yard            | Standard  | 4     | A through road at each end, one island between.|
-| Kaveripuram Junction  | Advanced  | 8     | An Indian junction: six platforms, two sidings through the middle. |
+| Kaveripuram Junction  | Advanced  | 8     | An Indian junction: goods lines along both edges, six platforms on three islands. |
 | Pazhayapuram Junction | Standard  | 5     | The same country in the age of steam: steam engines, semaphores, a diesel now and then. |
 
 An eighth, **MGR Chennai Central** (12 roads, a real terminus with a stabling
@@ -82,17 +82,30 @@ kinked.
 A fictional junction on the Chennai–Bengaluru line, drawn and run the way
 an Indian Railways station is:
 
-- **The layout.** Platform 1 is a side platform along the front of the
-  station building, as it is at nearly every station in India. Across the
-  tracks are two island platforms (2 and 3, 4 and 5) and another side
-  platform (6) on the far side. Between the islands run two platformless
-  sidings, S1 and S2, for goods trains and expresses that don't stop. A
-  one-road entry in a station's `islands` list makes a side platform, and a
-  `band` pins its roads lower on the map, leaving room for the building.
+- **The layout.** The outermost roads, 1 and 8, are platformless goods
+  lines (GL1 and GL2) for freight and the expresses that don't stop. The six
+  platforms between them stand on three islands, numbered across the tracks
+  from the station building:
+
+  | Road | Name | Takes |
+  |------|------|-------|
+  | 1 | GL1, Goods Line 1 | freight, 8 |
+  | 2 | PF1 | 6 cars |
+  | 3 | PF2 | 5 cars |
+  | 4 | PF3 | 6 cars |
+  | 5 | PF4 | 6 cars |
+  | 6 | PF5 | 5 cars |
+  | 7 | PF6 | 4 cars |
+  | 8 | GL2, Goods Line 2 | freight, 8 |
+
+  The building stands back across a strip of concourse behind goods line 1,
+  with the station's name boards on it and the footbridge reaching over the
+  line to the islands (`RY.frontage` in geom.js). A one-road entry in a
+  station's `islands` list makes a side platform, as at Pazhayapuram, and a
+  `band` pins the roads lower on the map, leaving room for the building.
 - **The platforms.** A stone-tiled deck with a broad band of yellow tactile
   paving along each edge, and a long shed of green corrugated sheet on green
-  columns: pitched over an island, a lean-to off the building over
-  platform 1. At the open ends are a tea stall, a book stall, a
+  columns, pitched over each island. At the open ends are a tea stall, a book stall, a
   drinking-water booth and stone benches. Every sign is black on yellow, and
   the side platforms carry the station's name board. They're a good deal
   busier than elsewhere, and far more colourful.

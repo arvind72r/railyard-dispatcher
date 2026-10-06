@@ -44,6 +44,20 @@
     return { x0: LAY.stopX - half, x1: LAY.stopX + half, len: half * 2 };
   };
 
+  /* Where an Indian or steam-era station's building stands: y, its front
+     edge (it runs up the map from there); sp, the span it's laid along; and
+     deck, where the ground in front of it ends. Usually platform 1 is a side
+     platform against it, and then that platform is all three. Where road 1
+     is a goods line instead, the building stands back across a strip of
+     concourse — as deep as a side platform's deck — behind that line, with
+     the footbridge reaching over it, along the longest platform. */
+  RY.frontage = function () {
+    var p = RY.ISLANDS[0], t0 = RY.TRACKS[0], best = null;
+    if (p && p.side && p.lower === t0) return { y: p.y0, sp: RY.platSpan(t0), deck: p.y1, concourse: false };
+    RY.TRACKS.forEach(function (t) { if (t.platform && (!best || t.maxCars > best.maxCars)) best = t; });
+    return { y: t0.y - 25 - SIDE_DECK, sp: RY.platSpan(best || t0), deck: t0.y - 30, concourse: true };
+  };
+
   /* The stretch of deck both faces share — where the canopy can go. A side
      platform (see layoutStation) has only the one face, so it's all of it. */
   RY.islandCore = function (isl) {
@@ -126,32 +140,34 @@
       ],
       islands: [[1, 2]]
     },
-    /* An Indian junction. Platform 1 is a side platform against the station
-       building, the way it is at nearly every station in India; the islands
-       beyond are numbered on across the tracks; and the two middle roads are
-       platformless sidings for goods trains and expresses that don't stop.
-       style: 'india' dresses the platforms, the buildings and the trains
-       (see scene.js, cab.js and the services below). band pins the roads
-       lower on the map than the others to leave room for the building and
-       its forecourt above platform 1. A one-road entry in islands is a side
-       platform, on the outside of the outermost road. */
+    /* An Indian junction. The outermost roads, 1 and 8, are platformless
+       goods lines, taking freight and the expresses that don't stop; the
+       six platforms between them stand in three islands, numbered across
+       the tracks from the station building, which stands back across a
+       strip of concourse behind goods line 1, the footbridge reaching over
+       it (RY.frontage). style: 'india' dresses the platforms, the
+       buildings and the trains (see scene.js, cab.js and the services
+       below). band pins the roads lower on the map than the others to leave
+       room for the building and its forecourt above road 1. A one-road
+       entry in islands would be a side platform, on the outside of the
+       outermost road. */
     {
       id: 'kaveripuram', name: 'Kaveripuram Junction', code: 'KVPM', difficulty: 'Advanced',
       style: 'india', nameTamil: 'காவேரிபுரம்',
       nameHindi: 'कावेरीपुरम',
-      blurb: 'An Indian junction: platform 1 against the station building, two sidings through the middle, six platforms in all.',
+      blurb: 'An Indian junction: goods lines along both edges, six platforms on three islands between them.',
       band: [300, 895],
       tracks: [
-        { short: 'PF1', name: 'Platform 1', maxCars: 6, platform: true  },
-        { short: 'PF2', name: 'Platform 2', maxCars: 6, platform: true  },
-        { short: 'PF3', name: 'Platform 3', maxCars: 5, platform: true  },
-        { short: 'S1',  name: 'Siding 1',   maxCars: 8, platform: false },
-        { short: 'S2',  name: 'Siding 2',   maxCars: 8, platform: false },
-        { short: 'PF4', name: 'Platform 4', maxCars: 5, platform: true  },
-        { short: 'PF5', name: 'Platform 5', maxCars: 6, platform: true  },
-        { short: 'PF6', name: 'Platform 6', maxCars: 4, platform: true  }
+        { short: 'GL1', name: 'Goods Line 1', maxCars: 8, platform: false },
+        { short: 'PF1', name: 'Platform 1',   maxCars: 6, platform: true  },
+        { short: 'PF2', name: 'Platform 2',   maxCars: 5, platform: true  },
+        { short: 'PF3', name: 'Platform 3',   maxCars: 6, platform: true  },
+        { short: 'PF4', name: 'Platform 4',   maxCars: 6, platform: true  },
+        { short: 'PF5', name: 'Platform 5',   maxCars: 5, platform: true  },
+        { short: 'PF6', name: 'Platform 6',   maxCars: 4, platform: true  },
+        { short: 'GL2', name: 'Goods Line 2', maxCars: 8, platform: false }
       ],
-      islands: [[0], [1, 2], [5, 6], [7]],
+      islands: [[1, 2], [3, 4], [5, 6]],
       origins: { west: ['Chennai', 'Arakkonam', 'Katpadi', 'Vellore', 'Tirupati'],
                  east: ['Bengaluru', 'Salem', 'Erode', 'Coimbatore', 'Mysuru'] },
       /* The same six kinds of service as everywhere else — same lengths,
