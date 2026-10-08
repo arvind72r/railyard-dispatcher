@@ -791,6 +791,14 @@
   function drawOLE(ctx, P) {
     var s, p, o, k;
     if (!P.masts) for (P.masts = [], s = 40; s < P.len; s += 170) P.masts.push(s);
+    // a mast stands either side of the line, unless that spot is on other
+    // track (out in a cascade throat, crossovers run between the roads)
+    P.mastSides = P.masts.map(function (ms) {
+      var q = RY.pathAt(P, ms);
+      return [-1, 1].map(function (o) {
+        return RY.trackClear(q.x - Math.sin(q.a) * o * 31, q.y + Math.cos(q.a) * o * 31, 18);
+      });
+    });
     RY.olePaths.push(P);
     ctx.save();
     poly(ctx, P.pts);
@@ -802,6 +810,7 @@
       ctx.save();
       ctx.translate(p.x, p.y); ctx.rotate(p.a);
       for (o = -1; o <= 1; o += 2) {
+        if (!P.mastSides[k][(o + 1) / 2]) continue;
         ctx.fillStyle = 'rgba(0,0,0,.5)';
         ctx.fillRect(-3, o * 31 - 3, 8, 8);
         ctx.fillStyle = '#5a6673';
