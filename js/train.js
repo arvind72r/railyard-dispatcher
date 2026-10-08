@@ -216,7 +216,7 @@
     // busy when it gets there — right at the far exit signal (drawn 30px
     // inset from the ladder boundary, same as sSlow/sFast above), so a
     // held train's nose stops under the signal instead of drifting past it.
-    this.sFarGate = RY.sAtX(P, this.dir > 0 ? L.xThroatE - 30 : L.xThroatW + 30);
+    this.sFarGate = RY.sAtX(P, RY.starterX(this.dir > 0 ? 'E' : 'W', this.trackId || 0));
   };
 
   Train.prototype.tailS = function () { return this.s - this.len; };

@@ -16,7 +16,9 @@
      of a pixel. */
   var PX = 0;
   function minW(w, px) { return Math.max(w, px * PX); }
-  var LAY_MID = L.stopX;
+  /* The station's own name, as its boards give it: a variant laid out
+     differently (Kaveripuram Junction (Realistic)) is still the one place. */
+  function placeName() { return RY.station.name.replace(/ \(Realistic\)$/, ''); }
   function india() { return RY.station && RY.station.style === 'india'; }
   function retro() { return RY.station && RY.station.style === 'retro'; }
 
@@ -512,7 +514,7 @@
     });
     // and the station's own name boards, on the side platforms
     if (isl.side) {
-      var st = RY.station, nm = st.name.replace(' Junction', ' JN.').toUpperCase();
+      var st = RY.station, nm = placeName().replace(' Junction', ' JN.').toUpperCase();
       [core.x0 + 170, core.x1 - 170].forEach(function (bx) {
         signPlate(ctx, bx, (y0 + y1) / 2, nm, IN_YELLOW, IN_INK);
       });
@@ -624,7 +626,7 @@
       signPlate(ctx, f.sp.x1 - 64, py, txt, RT_CREAM, RT_INK);
     });
     if (isl.side) {
-      var nm = RY.station.name.replace(' Junction', ' JN.').toUpperCase();
+      var nm = placeName().replace(' Junction', ' JN.').toUpperCase();
       [core.x0 + 175, core.x1 - 175].forEach(function (bx) { signPlate(ctx, bx, (y0 + y1) / 2, nm, RT_CREAM, RT_INK); });
     }
   }
@@ -653,20 +655,33 @@
     // between it and the next road in
     var fr = (india() || retro()) && RY.frontage(), nb = T[T.indexOf(t) + (below ? -1 : 1)];
     if (fr && fr.concourse && !below && y < fr.deck + 12 && nb) y = (t.y + nb.y) / 2;
+    // the stretch it can have: between the throats — or, in a cascade
+    // throat, whose crossovers can reach on in along a goods line, between
+    // the last of any track it would lie over at either end
+    var x0 = L.xThroatW + 40, x1 = L.xThroatE - 40;
+    if (L.cascade) {
+      RY.buildTrackwork().forEach(function (P) {
+        P.pts.forEach(function (q) {
+          if (Math.abs(q.y - y) > 26) return;
+          if (q.x < L.stopX) x0 = Math.max(x0, q.x + 40); else x1 = Math.min(x1, q.x - 40);
+        });
+      });
+    }
     // hatched no-platform strip beside the road
     ctx.save();
-    ctx.beginPath(); ctx.rect(L.xThroatW + 40, y - 9, L.xThroatE - L.xThroatW - 80, 18);
+    ctx.beginPath(); ctx.rect(x0, y - 9, x1 - x0, 18);
     ctx.clip();
     ctx.fillStyle = 'rgba(30,36,30,.35)';
-    ctx.fillRect(L.xThroatW + 40, y - 9, L.xThroatE - L.xThroatW - 80, 18);
+    ctx.fillRect(x0, y - 9, x1 - x0, 18);
     ctx.strokeStyle = 'rgba(216,176,60,.28)'; ctx.lineWidth = 4;
-    for (x = L.xThroatW; x < L.xThroatE; x += 16) {
+    for (x = x0 - 16; x < x1; x += 16) {
       ctx.beginPath(); ctx.moveTo(x, y + 12); ctx.lineTo(x + 16, y - 12); ctx.stroke();
     }
     ctx.restore();
-    signPlate(ctx, LAY_MID, y, t.name.toUpperCase() + ' \u00b7 NO PLATFORM \u00b7 MAX ' + t.maxCars, '#4a3410');
+    var cx = (x0 + x1) / 2, side = L.cascade ? Math.min(300, (x1 - x0) / 2 - 110) : 300;
+    signPlate(ctx, cx, y, t.name.toUpperCase() + ' \u00b7 NO PLATFORM \u00b7 MAX ' + t.maxCars, '#4a3410');
     for (i = -1; i <= 1; i += 2) {
-      signPlate(ctx, LAY_MID + i * 300, y, india() ? 'GOODS & NON-STOP' : 'FREIGHT & NON-STOP', '#4a3410');
+      if (side > 230) signPlate(ctx, cx + i * side, y, india() ? 'GOODS & NON-STOP' : 'FREIGHT & NON-STOP', '#4a3410');
     }
   }
 
@@ -915,7 +930,7 @@
       ctx.beginPath(); ctx.moveTo(sp.x0 - 20, fr.deck - 1.5); ctx.lineTo(sp.x1 + 20, fr.deck - 1.5); ctx.stroke();
       ctx.fillStyle = 'rgba(40,44,40,.9)';
       for (x = sp.x0 - 18; x < sp.x1 + 20; x += 16) ctx.fillRect(x, fr.deck - 3, 2, 3);
-      var nm = st.name.replace(' Junction', ' JN.').toUpperCase();
+      var nm = placeName().replace(' Junction', ' JN.').toUpperCase();
       [sp.x0 + 170, sp.x1 - 170].forEach(function (nx) { signPlate(ctx, nx, (by1 + fr.deck) / 2 + 4, nm, IN_YELLOW, IN_INK); });
     }
 
@@ -933,7 +948,7 @@
     ctx.fillStyle = '#4a463d'; ctx.fillRect(bx0 - 160, 64, bx1 - bx0 + 320, by0 - 64);
     ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(bx0 - 160, 64, bx1 - bx0 + 320, 2);
     // neem trees along the road
-    for (i = 0; i < 16; i++) {
+    for (i = 0; 40 + i * 122 < RY.W; i++) {
       x = 40 + i * 122 + rnd() * 30; y = 14 + rnd() * 8;
       if (x > bx0 - 170 && x < bx1 + 170) continue;
       ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(x + 4, y + 6, 17, 0, 6.2832); ctx.fill();
@@ -958,7 +973,7 @@
     ctx.font = '700 12px "Kohinoor Devanagari", "Noto Sans Devanagari", sans-serif';
     ctx.fillText(st.nameHindi + ' जंक्शन', cx + nw / 4, ny + 12);
     ctx.font = '800 15px ui-monospace, Menlo, monospace';
-    ctx.fillText(st.name.replace(' Junction', ' JN.').toUpperCase() + '  (' + st.code + ')', cx, ny + 29);
+    ctx.fillText(placeName().replace(' Junction', ' JN.').toUpperCase() + '  (' + st.code + ')', cx, ny + 29);
 
     // the overhead water tank, west of the building
     var tx = bx0 - 110, ty = by0 + 44;
@@ -1022,12 +1037,14 @@
       ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = .8;
       for (var k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(x, 942 + k * 3.7); ctx.lineTo(x + 48, 942 + k * 3.7); ctx.stroke(); }
     }
-    ctx.fillStyle = 'rgba(0,0,0,.45)'; rr(ctx, 1496, 916, 186, 58, 4); ctx.fill();
-    ctx.fillStyle = '#7c6e58'; rr(ctx, 1492, 912, 186, 58, 4); ctx.fill();
+    // (kept the same distance from the east edge in a wider world)
+    var dx = RY.W - 1920;
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; rr(ctx, 1496 + dx, 916, 186, 58, 4); ctx.fill();
+    ctx.fillStyle = '#7c6e58'; rr(ctx, 1492 + dx, 912, 186, 58, 4); ctx.fill();
     ctx.fillStyle = '#8b7c64';
-    for (x = 1492; x < 1678; x += 20) ctx.fillRect(x, 912, 10, 58);
+    for (x = 1492 + dx; x < 1678 + dx; x += 20) ctx.fillRect(x, 912, 10, 58);
     ctx.fillStyle = '#9aa4b0'; ctx.font = '700 10px ui-monospace, monospace';
-    ctx.fillText('P-WAY STORE', 1585, 986);
+    ctx.fillText('P-WAY STORE', 1585 + dx, 986);
   }
   /* An auto-rickshaw from above: yellow canopy, green-black body. */
   function auto(ctx, x, y) {
@@ -1080,7 +1097,7 @@
     ctx.font = '700 11px "Tamil Sangam MN", "Noto Sans Tamil", sans-serif';
     ctx.fillText('பழையபுரம் சந்திப்பு', cx, ny + 11);
     ctx.font = '800 14px Georgia, "Times New Roman", serif';
-    ctx.fillText(st.name.replace(' Junction', ' JN.').toUpperCase(), cx, ny + 25);
+    ctx.fillText(placeName().replace(' Junction', ' JN.').toUpperCase(), cx, ny + 25);
 
     // the water tank on its trestle, west of the building
     var tx = bx0 - 105, ty = by0 + 40;
@@ -1205,10 +1222,10 @@
     // turnout blades where the ladders leave the mains — a terminus has
     // no west ladder to draw blades for at all (see buildTrackwork). A
     // realistic throat has its own list: one set per real turnout.
-    if (L.ladder) {
-      RY.ladderTurnouts().forEach(function (tp) { drawBladesAt(ctx, tp); });
+    if (L.ladder || L.cascade) {
+      (L.cascade ? RY.cascadeTurnouts : RY.ladderTurnouts)().forEach(function (tp) { drawBladesAt(ctx, tp); });
     }
-    for (i = 0; i < T.length && !L.ladder; i++) {
+    for (i = 0; i < T.length && !L.ladder && !L.cascade; i++) {
       var oA = RY.divOff(L.mainA, T[i].y), oB = RY.divOff(L.mainB, T[i].y);
       if (!L.terminus) {
         drawBlades(ctx, L.xWestHome + oA, L.mainA, T[i].y,  1);
@@ -1227,8 +1244,12 @@
     if (wired) drawOLE(ctx, RY.makePath([{ x: L.xEastHome - 40, y: L.mainA }, { x: RY.W, y: L.mainA }]));
     if (wired) drawOLE(ctx, RY.makePath([{ x: L.xEastHome - 40, y: L.mainB }, { x: RY.W, y: L.mainB }]));
     for (i = 0; i < T.length && wired; i++) {
-      var oleWest = L.terminus ? RY.platSpan(T[i]).x0 : L.xThroatW;
-      var road = RY.makePath([{ x: oleWest, y: T[i].y }, { x: L.xThroatE, y: T[i].y }]);
+      // from 30 outside one starter to 30 outside the other, so a mast
+      // stands at each to carry it (see roadMasts) — the throat's edges,
+      // or in a cascade throat, out by each road's own branch
+      var oleWest = L.terminus ? RY.platSpan(T[i]).x0 : RY.starterX('W', i) - 30;
+      var oleEast = L.terminus ? L.xThroatE : RY.starterX('E', i) + 30;
+      var road = RY.makePath([{ x: oleWest, y: T[i].y }, { x: oleEast, y: T[i].y }]);
       road.masts = roadMasts(road.len);
       drawOLE(ctx, road);
     }

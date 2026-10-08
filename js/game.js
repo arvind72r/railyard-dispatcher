@@ -40,6 +40,7 @@
     state: 'menu',
     trains: [], trackOwner: freshTrackOwner(),
     throat: { W: { pos: null, neg: null }, E: { pos: null, neg: null } },
+    trail: { W: [], E: [] },        // in a cascade throat: trains let in behind, still clearing it (canFollow)
     gameT: 360, elapsed: 0, played: 0, level: 1, score: 0, lives: 3, combo: 0,
     onTime: 0, events: 0, arrivals: 0, dispatched: 0, late: 0,
     spawnIn: 2.5, sel: null, hoverTrack: -1, hoverTrain: null,
@@ -175,10 +176,30 @@
      was), or an opposite-direction train's route physically crosses this
      one's, per the precomputed geometry in RY.crossTable. */
   function throatConflict(side, tr, trackId) {
-    var same = G.throat[side][slotOf(tr.dir)];
-    if (same) return { train: same, crossing: false };
-    var opp = G.throat[side][slotOf(-tr.dir)];
-    return crosses(side, tr, trackId, opp) ? { train: opp, crossing: true } : null;
+    var trail = G.trail[side], i, o;
+    var same = trail.filter(function (t) { return t.dir === tr.dir; });
+    if (G.throat[side][slotOf(tr.dir)]) same.push(G.throat[side][slotOf(tr.dir)]);
+    for (i = 0; i < same.length; i++) if (!canFollow(side, same[i], tr, trackId)) return { train: same[i], crossing: false };
+    var opp = trail.filter(function (t) { return t.dir !== tr.dir; });
+    if (G.throat[side][slotOf(-tr.dir)]) opp.push(G.throat[side][slotOf(-tr.dir)]);
+    for (i = 0; i < opp.length; i++) { o = opp[i]; if (crosses(side, tr, trackId, o)) return { train: o, crossing: true }; }
+    return null;
+  }
+  /* In a cascade throat a train coming in needn't wait for the one in
+     front to be right through: only for it to be past the last of the
+     track their routes share (geom.js RY.followClearX). The one in front
+     then moves to G.trail, still checked against by everything else,
+     until it's past its own road's starter (entryClearX). */
+  function canFollow(side, lead, tr, trackId) {
+    if (!L.cascade || RY.station.terminus) return false;
+    if (side !== entSide(tr) || side !== entSide(lead) || lead.dir !== tr.dir) return false;
+    if (lead.state === 'approach' || lead.trackId === null || lead.trackId === trackId) return false;
+    var x = RY.followClearX(side, lead.trackId, trackId), tx = lead.tailX();
+    return side === 'W' ? tx >= x : tx <= x;
+  }
+  function dropTrail(tr, side) {
+    var t = G.trail[side], k = t.indexOf(tr);
+    if (k >= 0) t.splice(k, 1);
   }
 
   /* The roads a train is physically able to use, ignoring who holds what. */
@@ -226,7 +247,8 @@
     for (i = 0; i < T.length; i++) if (!compat(tr, T[i])) { comp.push(T[i]); minCap = Math.min(minCap, T[i].maxCars); }
 
     G.trackOwner[idx] = tr; tr.holdsTrack = true;
-    var ent = entSide(tr);
+    var ent = entSide(tr), prev = G.throat[ent][slotOf(tr.dir)];
+    if (prev && prev !== tr) G.trail[ent].push(prev);   // let in behind it — it's still clearing the throat
     G.throat[ent][slotOf(tr.dir)] = tr; tr.holdsThroat[ent] = true;
     // A yard-origin service is physically leaving its stabling road for
     // good the moment it's called forward — free that road now, or it
@@ -293,6 +315,7 @@
     var slot = slotOf(tr.dir);
     if (G.throat.W[slot] === tr) G.throat.W[slot] = null;
     if (G.throat.E[slot] === tr) G.throat.E[slot] = null;
+    dropTrail(tr, 'W'); dropTrail(tr, 'E');
     tr.holdsTrack = false; tr.holdsThroat.W = false; tr.holdsThroat.E = false;
   }
 
@@ -435,14 +458,23 @@
      that doesn't exist there) don't apply — every lock at a terminus is
      taken and dropped explicitly at the relevant state transition in
      updateTrain() instead. */
+  /* Where a train coming in has finished with its entry throat: once its
+     tail is past here, the next one can be let in. Just inside the throat
+     — or, in a cascade throat, as soon as it's clear of every other
+     route's points (geom.js RY.entryClearX). */
+  function entryClearX(tr) {
+    if (L.cascade && tr.trackId !== null) return RY.entryClearX(tr.dir > 0 ? 'W' : 'E', tr.trackId);
+    return tr.dir > 0 ? L.xThroatW + 8 : L.xThroatE - 8;
+  }
+
   function updateResources(tr) {
     if (RY.station.terminus) return;
     var ent = tr.dir > 0 ? 'W' : 'E', ex = ent === 'W' ? 'E' : 'W', tx = tr.tailX();
     var slot = slotOf(tr.dir);
 
     if (tr.holdsThroat[ent] && tr.state !== 'approach') {
-      var out = tr.dir > 0 ? (tx >= L.xThroatW + 8) : (tx <= L.xThroatE - 8);
-      if (out) { tr.holdsThroat[ent] = false; if (G.throat[ent][slot] === tr) G.throat[ent][slot] = null; }
+      var out = tr.dir > 0 ? (tx >= entryClearX(tr)) : (tx <= entryClearX(tr));
+      if (out) { tr.holdsThroat[ent] = false; if (G.throat[ent][slot] === tr) G.throat[ent][slot] = null; dropTrail(tr, ent); }
     }
     if (tr.holdsTrack && (tr.state === 'depart' || !tr.stops)) {
       var off = tr.dir > 0 ? (tx >= L.xThroatE) : (tx <= L.xThroatW);
@@ -522,7 +554,7 @@
               // hold clear of the far ladder, and short of the starter so
               // it's in sight — but never so far short that the tail is
               // left in the entry throat, still holding it (updateResources)
-              var clearS = RY.sAtX(tr.path, tr.dir > 0 ? L.xThroatW + 12 : L.xThroatE - 12);
+              var clearS = RY.sAtX(tr.path, entryClearX(tr) + (tr.dir > 0 ? 4 : -4));
               tr.targetS = tr.sFarGate - Math.max(0, Math.min(SIGNAL_SIGHT, tr.sFarGate - tr.len - clearS));
             } else {
               G.throat[farSide][slotOf(tr.dir)] = tr; tr.holdsThroat[farSide] = true;
@@ -829,8 +861,9 @@
       // by itself clearance, or the signal would read green the moment
       // it's assigned a road, long before it's allowed to cross.
       var ready = o && (o.stops ? o.state === 'depart' : o.gateCleared);
-      sig(L.xThroatE - 30, T[i].y + 34, ready && o.dir > 0 && !pastSignal(o, L.xThroatE - 30), 1, T[i].y);
-      sig(L.xThroatW + 30, T[i].y - 34, ready && o.dir < 0 && !pastSignal(o, L.xThroatW + 30), -1, T[i].y);
+      var xE = RY.starterX('E', i), xW = RY.starterX('W', i);   // 30 in from each throat, or (a cascade) by the road's own branch
+      sig(xE, T[i].y + 34, ready && o.dir > 0 && !pastSignal(o, xE), 1, T[i].y);
+      sig(xW, T[i].y - 34, ready && o.dir < 0 && !pastSignal(o, xW), -1, T[i].y);
     }
     return out;
   }
@@ -1382,7 +1415,7 @@
     // one frozen mid-shift
     G.trains = []; G.sel = null; G.hoverTrain = null; G.hoverTrack = -1;
     G.trackOwner = freshTrackOwner();
-    G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } };
+    G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } }; G.trail = { W: [], E: [] };
     RY.cab.reset();
     RY.steam.reset();
     elBanner.innerHTML = '';
@@ -1497,6 +1530,7 @@
     RY.audio.init();
     RY.audio.resume();
     var def = RY.applyStation(selectedStationId);
+    resize();                             // a station may be laid in a wider world (geom.js def.worldW)
     RY.bakeScene(shownScale(), view.scale);
     RY.cab.reset();
     RY.steam.reset();
@@ -1505,7 +1539,7 @@
     document.title = 'Railyard Dispatcher \u2014 ' + def.name;
     G.state = 'running';
     G.trains = []; G.trackOwner = freshTrackOwner();
-    G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } };
+    G.throat = { W: { pos: null, neg: null }, E: { pos: null, neg: null } }; G.trail = { W: [], E: [] };
     G.gameT = 360; G.elapsed = 0; G.played = 0; G.level = 1; G.score = 0; G.lives = 3;
     G.combo = 0; G.onTime = 0; G.events = 0; G.arrivals = 0;
     G.dispatched = 0; G.late = 0;

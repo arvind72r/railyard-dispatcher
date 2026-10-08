@@ -21,7 +21,7 @@
   var LAY = RY.LAY = {
     xWestEnd: 0, xWestHome: 0, xThroatW: 0, xThroatE: 0,
     xEastHome: 0, xEastEnd: 0, mainA: 0, mainB: 0, stopX: 0, maxDiv: 136,
-    terminus: false, ladder: null
+    terminus: false, ladder: null, cascade: null
   };
   RY.TRACKS = [];
   RY.ISLANDS = [];
@@ -397,6 +397,25 @@
     }
   ];
 
+  /* Kaveripuram (Realistic): the same station, roads and trains, through
+     the cascade throat (see planCascade) — every road stepped onto the
+     next by crossovers instead of curved straight off the mains. Its
+     throats need the length, so it's laid in a world a third wider than
+     the others and the map shows it a little smaller. Listed right after
+     the plain one. */
+  (function () {
+    var i, kv;
+    for (i = 0; i < RY.STATIONS.length; i++) if (RY.STATIONS[i].id === 'kaveripuram') kv = i;
+    var real = {};
+    Object.keys(RY.STATIONS[kv]).forEach(function (k) { real[k] = RY.STATIONS[kv][k]; });
+    real.id = 'kaveripuram-real';
+    real.name = 'Kaveripuram Junction (Realistic)';
+    real.blurb = 'The same junction through a throat laid like a real one: every road stepped onto the next by crossovers.';
+    real.throat = 'cascade';
+    real.worldW = 2560;
+    RY.STATIONS.splice(kv + 1, 0, real);
+  })();
+
   var CENTER_Y = 555, TRACK_GAP = 130, BAND_HALF = 300, STOP_X = 920, SIDE_DECK = 40;
 
   /* A terminus is not a reshaped through station: every road dead-ends at
@@ -543,6 +562,60 @@
   /* Every road, whatever the station, connects to its throat/mains through
      a ladder of the same kind — only the road count and the longest
      platform change how far apart things need to be. */
+  /* ---- the cascade throat ----------------------------------------------
+     Kaveripuram (Realistic)'s, laid out as a dispatcher sketched it. At
+     each end one main runs in and one runs out (at the west, B in and A
+     out; at the east, A in and B out). Each divides right by the home
+     signal: one leg bends onto the road beside it and carries on as that
+     road, the other runs to the middle road (4), between the mains. Every
+     other road is reached by stepping road to road, through crossovers
+     between neighbours, the way a train actually threads a busy throat:
+
+       - departures cascade toward the out main: road 1 runs onto road 2,
+         road 2 onto road 3, and road 3's line becomes the main; those
+         from beyond the mains step onto road 4 and out off it;
+       - arrivals come off the in main onto the road beside it and step
+         outward road by road; those for beyond the mains go in across
+         road 4 and then outward, one crossover at a time.
+
+     Where an arrival's crossover and a departure's share the gap between
+     two roads, the departure's lies nearer the signal. That keeps an
+     arrival into a road clear of the track a departure from any road
+     beyond it uses: as many moves at once as any layout allows (see
+     buildCascadeCrossTable).
+
+     The longest runs of steps set how steep the crossovers must be: off
+     the far side of the mains, through road 4, and on to the outermost
+     road. Each is laid end to end, every crossover as long as it can be:
+     each must have joined its road before that road's platform begins,
+     and a road with no platform (a goods line) lets its last crossover
+     run on in toward the station, so long as a through freight held at
+     its far starter still fits clear of the throat it came in by. Every
+     other crossover is stretched to fill the gap it has to itself.
+     Positions run in u, inward from the home signal, mirrored at the two
+     ends like the ladder's. */
+  var CASC_LEAD = 26,      // home signal to where each main divides
+      CASC_BEND = 80,      // a main's bend onto the road beside it
+      CASC_WYE = 110,      // a main's other leg, onto the middle road
+      CASC_EDGE = 10,      // a bend's end to the first crossover off its road
+      CASC_MARGIN = 16,    // end of the throat to the longest platform's ramp
+      CASC_MIN_HOME = 110, // keep the home signal, and whoever waits at it, on stage
+      CASC_MIN_STEP = 80,  // shorter than this and a coach would be on two crossovers at once
+      CASC_FIT = 700,      // the longest through train, held at a starter, must stand clear of the throats
+      CASC_FOUL = 80;      // a crossover's legs are a vehicle's width apart this far from its points
+  function planCascade(tracks, mainA, mainB, room) {
+    var upper = [], lower = [], middle = [];
+    tracks.forEach(function (t) {
+      if (t.y < mainA - 1) upper.push(t); else if (t.y > mainB + 1) lower.push(t); else middle.push(t);
+    });
+    if (!upper.length || !lower.length || middle.length !== 1) return null;
+    upper.sort(function (a, b) { return b.y - a.y; });   // nearest main A first
+    lower.sort(function (a, b) { return a.y - b.y; });   // nearest main B first
+    var us = CASC_LEAD + CASC_WYE + 6;                   // where the middle road's crossovers start
+    if ((room - us) / Math.max(upper.length, lower.length) < CASC_MIN_STEP) return null;
+    return { upper: upper, lower: lower, mid: middle[0], us: us, T: room };
+  }
+
   function layoutStation(def) {
     var n = def.tracks.length;
     var gap = Math.min(TRACK_GAP, (2 * BAND_HALF) / Math.max(1, n - 1));
@@ -557,7 +630,7 @@
     var maxPlatCars = 4;
     tracks.forEach(function (t) { if (t.platform) maxPlatCars = Math.max(maxPlatCars, t.maxCars); });
     var half = (maxPlatCars * RY.PLAT_UNIT + 44) / 2;
-    var stopX = STOP_X;
+    var stopX = def.worldW ? def.worldW / 2 - 40 : STOP_X;
     var lay, yard = [];
 
     if (def.terminus) {
@@ -574,7 +647,7 @@
         xThroatW: xThroatE, xThroatE: xThroatE,
         xEastHome: xEastHome, xEastEnd: xEastHome + 900,
         mainA: CENTER_Y - 50, mainB: CENTER_Y + 50,
-        stopX: stopX, maxDiv: 136, terminus: true, ladder: null
+        stopX: stopX, maxDiv: 136, terminus: true, ladder: null, cascade: null
       };
       lay.yardNear = xEastHome + 40;    // where a shunt move first leaves the main
       lay.yardFar = RY.W - 60;          // how far into the yard a stabled train sits
@@ -594,6 +667,13 @@
         if (plan) { margin = LAD_MARGIN; homeGap = plan.T; }
         else if (root.console) root.console.warn(def.id + ": road list doesn't suit a realistic throat; using the classic fan");
       }
+      var casc = null;
+      if (def.throat === 'cascade') {
+        casc = planCascade(tracks, CENTER_Y - 50, CENTER_Y + 50,
+                           stopX - half - CASC_MARGIN - CASC_MIN_HOME);
+        if (casc) { margin = CASC_MARGIN; homeGap = casc.T; }
+        else if (root.console) root.console.warn(def.id + ": road list doesn't suit a cascade throat; using the classic fan");
+      }
       var xThroatW = stopX - half - margin, xThroatE = stopX + half + margin;
       var xWestHome = xThroatW - homeGap, xEastHome = xThroatE + homeGap;
       lay = {
@@ -601,7 +681,7 @@
         xThroatW: xThroatW, xThroatE: xThroatE,
         xEastHome: xEastHome, xEastEnd: xEastHome + 900,
         mainA: CENTER_Y - 50, mainB: CENTER_Y + 50,
-        stopX: stopX, maxDiv: 136, terminus: false, ladder: plan
+        stopX: stopX, maxDiv: casc ? CASC_LEAD : 136, terminus: false, ladder: plan, cascade: casc
       };
     }
 
@@ -629,6 +709,7 @@
     var def = null, i;
     for (i = 0; i < RY.STATIONS.length; i++) if (RY.STATIONS[i].id === id) def = RY.STATIONS[i];
     if (!def) def = RY.STATIONS[0];
+    RY.W = def.worldW || 1920;          // a station with longer throats is laid in a wider world, shown smaller
     var geo = layoutStation(def);
 
     Object.keys(geo.lay).forEach(function (k) { LAY[k] = geo.lay[k]; });
@@ -813,6 +894,239 @@
     var cr = dx * (q.y - at.y) - dy * (q.x - at.x);
     return { x: at.x, y: at.y, a: Math.atan2(dy, dx), side: cr > 0 ? 1 : -1 };
   }
+  /* One end of a cascade throat, in u: which main runs in here and which
+     out, the roads beyond each (nearest first), every crossover, and where
+     each road's own line begins. */
+  function cascadeEnd(side) {
+    var p = LAY.cascade, key = side;
+    if (p._ends && p._ends[key]) return p._ends[key];
+    var inA = side === 'E';
+    var inG = inA ? p.upper : p.lower, outG = inA ? p.lower : p.upper, mid = p.mid;
+    var yIn = inA ? LAY.mainA : LAY.mainB, yOut = inA ? LAY.mainB : LAY.mainA;
+    var pc = {}, start = {}, k, u0 = CASC_LEAD, bendEnd = u0 + CASC_BEND, us = p.us, T = p.T;
+    var m0 = bendEnd + CASC_EDGE, nIn = inG.length, nOut = outG.length;
+    // the two long chains, laid end to end from us: departures from the in
+    // side's roads (Q, then E1..) and arrivals to the out side's (R, then
+    // C1..). The k-th crossover of a chain lands on the k-th road out, and
+    // must have done so by where that road's platform starts; a goods line
+    // has none, so only the fit of a held through train limits it. The
+    // other crossover in each gap is stretched to fill what's left nearer
+    // the signal.
+    var span = LAY.xEastHome - LAY.xWestHome;
+    function lim(r) {
+      if (!r.platform) return Infinity;
+      var sp = RY.platSpan(r);
+      return side === 'W' ? sp.x0 - CASC_MARGIN - LAY.xWestHome : LAY.xEastHome - sp.x1 - CASC_MARGIN;
+    }
+    function chainL(roads) {
+      var l = Infinity, k, n = roads.length;
+      for (k = 1; k <= n; k++) l = Math.min(l, (lim(roads[k - 1]) - us) / k);
+      // ending on a goods line: its starter here, and where a train coming
+      // in on it at the far end is clear, must leave room for a train between
+      if (!roads[n - 1].platform) l = Math.min(l, (span - 2 * us - 30 - CASC_FOUL - CASC_FIT) / (2 * n - 1));
+      return Math.max(CASC_MIN_STEP, l);
+    }
+    var l1 = chainL(inG), l2 = chainL(outG);
+    function piece(id, a, b, ya, yb) { pc[id] = { id: id, u0: a, u1: b, y0: ya, y1: yb }; }
+    pc.bendIn = { id: 'bendIn', u0: u0, u1: bendEnd, y0: yIn, y1: inG[0].y, bend: true };
+    pc.bendOut = { id: 'bendOut', u0: u0, u1: bendEnd, y0: yOut, y1: outG[0].y, bend: true };
+    piece('PmOut', u0, u0 + CASC_WYE - 4, yOut, mid.y);      // departures from road 4, onto the out main
+    piece('PmIn', u0, u0 + CASC_WYE, yIn, mid.y);            // arrivals to road 4, off the in main
+    piece('R', us, us + l2, mid.y, outG[0].y);
+    piece('Q', us + 4, us + l1, mid.y, inG[0].y);
+    for (k = 1; k < nOut; k++) {
+      piece('C' + k, us + k * l2, us + (k + 1) * l2, outG[k - 1].y, outG[k].y);
+      piece('M' + k, k === 1 ? m0 : us + (k - 1) * l2, us + k * l2, outG[k - 1].y, outG[k].y);
+    }
+    for (k = 1; k < nIn; k++) {
+      piece('E' + k, us + k * l1, us + (k + 1) * l1, inG[k - 1].y, inG[k].y);
+      piece('D' + k, k === 1 ? m0 : us + (k - 1) * l1, us + k * l1, inG[k - 1].y, inG[k].y);
+    }
+    start[outG[0].id] = bendEnd; start[inG[0].id] = bendEnd; start[mid.id] = Math.min(pc.PmOut.u1, pc.PmIn.u1);
+    for (k = 1; k < outG.length; k++) start[outG[k].id] = pc['M' + k].u1;
+    for (k = 1; k < inG.length; k++) start[inG[k].id] = pc['D' + k].u1;
+    var e = { side: side, pc: pc, start: start, inG: inG, outG: outG, mid: mid, yIn: yIn, yOut: yOut, end: p.T };
+    (p._ends = p._ends || {})[key] = e;
+    return e;
+  }
+  /* A route through one end, from its home signal in to where road `id`
+     runs on alone: 'in' off the main that runs in here, 'out' onto the one
+     that runs out (laid from the main inward either way, like
+     ladderRoute's). Points to run it, and the track it holds: every
+     crossover and every stretch of each road's line it uses. */
+  function cascadeRoute(side, way, id) {
+    var e = cascadeEnd(side), pc = e.pc, p = LAY.cascade, ck = side + way + id;
+    if (p._routes && p._routes[ck]) return p._routes[ck];
+    var steps = [], at, k, j;
+    var ki = -1, ko = -1;
+    for (j = 0; j < e.inG.length; j++) if (e.inG[j].id === id) ki = j;
+    for (j = 0; j < e.outG.length; j++) if (e.outG[j].id === id) ko = j;
+    function run(road, to) { steps.push({ road: road, a: at, b: to }); at = to; }
+    function take(pid) { steps.push({ piece: pid }); at = pc[pid].u1; }
+    // the in side's roads are the in main's bend and what steps off it; the
+    // middle road and everything beyond it come off the main's other leg
+    if (way === 'in') {
+      if (ki >= 0) {
+        take('bendIn');
+        for (j = 1; j <= ki; j++) { run(e.inG[j - 1].id, pc['D' + j].u0); take('D' + j); }
+      } else {
+        take('PmIn');
+        if (ko >= 0) {
+          run(e.mid.id, pc.R.u0); take('R');
+          for (j = 1; j <= ko; j++) { run(e.outG[j - 1].id, pc['C' + j].u0); take('C' + j); }
+        }
+      }
+    } else {
+      if (ko >= 0) {
+        take('bendOut');
+        for (j = 1; j <= ko; j++) { run(e.outG[j - 1].id, pc['M' + j].u0); take('M' + j); }
+      } else {
+        take('PmOut');
+        if (ki >= 0) {
+          run(e.mid.id, pc.Q.u0); take('Q');
+          for (j = 1; j <= ki; j++) { run(e.inG[j - 1].id, pc['E' + j].u0); take('E' + j); }
+        }
+      }
+    }
+    run(id, Math.max(e.end, at));
+    var y0 = way === 'in' ? e.yIn : e.yOut, pts = [{ x: ladX(side, 0), y: y0 }], yOf = {};
+    RY.TRACKS.forEach(function (t) { yOf[t.id] = t.y; });
+    steps.forEach(function (st) {
+      if (st.piece) {
+        var q = pc[st.piece];
+        cat(pts, RY.sCurve(ladX(side, q.u0), q.y0, ladX(side, q.u1), q.y1, CURVE_N), false);
+      } else if (st.b > st.a) {
+        pts.push({ x: ladX(side, st.a), y: yOf[st.road] }, { x: ladX(side, st.b), y: yOf[st.road] });
+      }
+    });
+    // the train carries on along its road toward the platforms: as track
+    // it holds, that last stretch has no inner end
+    steps[steps.length - 1].b = Infinity;
+    var r = { pts: pts, steps: steps };
+    (p._routes = p._routes || {})[ck] = r;
+    return r;
+  }
+  /* Two routes through the same end clash if they share a crossover, or
+     any part of a road's line — a turnout included, which is a point both
+     stretches touch. */
+  function cascadeClash(r1, r2) {
+    var i, j, a, b;
+    for (i = 0; i < r1.steps.length; i++) {
+      a = r1.steps[i];
+      for (j = 0; j < r2.steps.length; j++) {
+        b = r2.steps[j];
+        if (a.piece && a.piece === b.piece) return true;
+        if (!a.piece && !b.piece && a.road === b.road && a.a <= b.b + 0.5 && b.a <= a.b + 0.5) return true;
+      }
+    }
+    return false;
+  }
+  /* Where road id's starter signal stands at one end — the signal a train
+     leaving that way waits at, and where a through train holds if the
+     throat beyond is busy (train.js sFarGate). Usually 30 in from the
+     throat. In a cascade throat a road's own line runs on out past that,
+     so its starter goes as close as it safely can to where its departures
+     branch off: just past the branch, but past the fouling point of every
+     other route that touches the line too, so a train standing at it
+     stands on track that's its road's alone. */
+  RY.starterX = function (side, id) {
+    var dflt = side === 'W' ? LAY.xThroatW + 30 : LAY.xThroatE - 30;
+    if (!LAY.cascade) return dflt;
+    var p = LAY.cascade, key = side + id;
+    if (p._starter && p._starter[key] !== undefined) return p._starter[key];
+    var e = cascadeEnd(side), dep = cascadeRoute(side, 'out', id).steps;
+    var u = dep[dep.length - 1].a + 30;        // just past where its own departures leave it
+    RY.TRACKS.forEach(function (t) {
+      if (t.id === id) return;
+      ['in', 'out'].forEach(function (way) {
+        cascadeRoute(side, way, t.id).steps.forEach(function (st) {
+          if (!st.piece && st.road === id) u = Math.max(u, st.b + CASC_FOUL);
+        });
+      });
+    });
+    var x = ladX(side, u);
+    (p._starter = p._starter || {})[key] = x;
+    return x;
+  };
+
+  /* Where a train coming in at `side` to road id has finished with the
+     throat: its tail past the fouling point of its own last crossover, and
+     past that of every other route touching the road's line — but not the
+     road's own departure crossover, which nothing can be using while a
+     train is coming in on that road. */
+  RY.entryClearX = function (side, id) {
+    var p = LAY.cascade, key = side + id;
+    if (p._entry && p._entry[key] !== undefined) return p._entry[key];
+    var e = cascadeEnd(side), arr = cascadeRoute(side, 'in', id).steps, u = 0, i;
+    for (i = 0; i < arr.length; i++) if (arr[i].piece) u = Math.max(u, e.pc[arr[i].piece].u0 + CASC_FOUL);
+    RY.TRACKS.forEach(function (t) {
+      if (t.id === id) return;
+      ['in', 'out'].forEach(function (way) {
+        cascadeRoute(side, way, t.id).steps.forEach(function (st) {
+          if (!st.piece && st.road === id) u = Math.max(u, st.b + CASC_FOUL);
+        });
+      });
+    });
+    var x = ladX(side, u);
+    (p._entry = p._entry || {})[key] = x;
+    return x;
+  };
+
+  /* Two trains coming in at the same end, one behind the other: where
+     the one in front (bound for road lead) must have its tail past before
+     the one behind (bound for road follow) can be let in. That's just past
+     the last of the track their two routes share — the fouling point of
+     the turnout where they part — and never further in than the leader's
+     own entry clearance (RY.entryClearX), past which it's on its own road anyway. */
+  RY.followClearX = function (side, lead, follow) {
+    var p = LAY.cascade;
+    if (!p) return null;
+    var key = side + lead + '>' + follow;
+    if (p._follow && p._follow[key] !== undefined) return p._follow[key];
+    var a = cascadeRoute(side, 'in', lead).steps, b = cascadeRoute(side, 'in', follow).steps, pc = cascadeEnd(side).pc, u = 0;
+    a.forEach(function (sa) {
+      b.forEach(function (sb) {
+        if (sa.piece && sa.piece === sb.piece) u = Math.max(u, pc[sa.piece].u1);
+        else if (!sa.piece && !sb.piece && sa.road === sb.road && sa.a <= sb.b + 0.5 && sb.a <= sa.b + 0.5) {
+          u = Math.max(u, Math.min(sa.b, sb.b));
+        }
+      });
+    });
+    var clear = RY.entryClearX(side, lead), x = ladX(side, u + CASC_FOUL);
+    x = side === 'W' ? Math.min(x, clear) : Math.max(x, clear);
+    (p._follow = p._follow || {})[key] = x;
+    return x;
+  };
+
+  /* Where to draw point blades in a cascade throat: wherever a crossover
+     leaves a line that also carries on — the line running on past it, or
+     another crossover landing there to join it. */
+  RY.cascadeTurnouts = function () {
+    var out = [];
+    if (!LAY.cascade) return out;
+    ['W', 'E'].forEach(function (side) {
+      var e = cascadeEnd(side), pc = e.pc, inw = side === 'W' ? 1 : -1, id, q, pts, rd, lands;
+      var roadAt = function (y) { for (var i = 0; i < RY.TRACKS.length; i++) if (Math.abs(RY.TRACKS[i].y - y) < 1) return RY.TRACKS[i].id; return -1; };
+      for (id in pc) {
+        q = pc[id];
+        if (q.bend) continue;
+        pts = RY.sCurve(ladX(side, q.u0), q.y0, ladX(side, q.u1), q.y1, CURVE_N);
+        // its outer end, leaving inward
+        rd = roadAt(q.y0);
+        if (rd < 0 && (Math.abs(q.y0 - e.yIn) < 1 || Math.abs(q.y0 - e.yOut) < 1)) {   // a main dividing
+          out.push(ladFrame(pts[0], inw, 0, pts[4]));
+          continue;
+        }
+        lands = Object.keys(pc).some(function (o) { return !pc[o].bend && Math.abs(pc[o].u1 - q.u0) < 0.5 && Math.abs(pc[o].y1 - q.y0) < 1; });
+        if (rd >= 0 && (q.u0 > e.start[rd] + 0.5 || lands)) out.push(ladFrame(pts[0], inw, 0, pts[4]));
+        // its inner end, leaving outward, where the line runs on outward of it
+        rd = roadAt(q.y1);
+        if (rd >= 0 && q.u1 > e.start[rd] + 0.5) out.push(ladFrame(pts[pts.length - 1], -inw, 0, pts[pts.length - 5]));
+      }
+    });
+    return out;
+  };
+
   RY.ladderTurnouts = function () {
     var p = LAY.ladder, out = [];
     if (!p) return out;
@@ -872,6 +1186,22 @@
         p.push({ x: bufX, y: trackY }, { x: LAY.xThroatE, y: trackY });
         cat(p, RY.sCurve(LAY.xThroatE, trackY, LAY.xEastHome - off, my, CURVE_N), true);
         p.push({ x: LAY.xEastHome, y: my }, { x: LAY.xEastEnd, y: my });
+      }
+      return RY.makePath(p);
+    }
+    if (LAY.cascade) {
+      var croad = trackAtY(trackY), cid = croad ? croad.id : 0;
+      var cw = cascadeRoute('W', dir > 0 ? 'in' : 'out', cid).pts, ce = cascadeRoute('E', dir > 0 ? 'out' : 'in', cid).pts;
+      if (dir > 0) {
+        p.push({ x: LAY.xWestEnd, y: my });
+        cat(p, cw, false);
+        cat(p, ce.slice().reverse(), false);
+        p.push({ x: LAY.xEastEnd, y: my });
+      } else {
+        p.push({ x: LAY.xEastEnd, y: my });
+        cat(p, ce, false);
+        cat(p, cw.slice().reverse(), false);
+        p.push({ x: LAY.xWestEnd, y: my });
       }
       return RY.makePath(p);
     }
@@ -990,7 +1320,22 @@
     }
     return table;
   }
+  /* table[side][i][j]: does the dir>0 route through `side` to road i
+     clash with the dir<0 one to road j? A dir>0 train comes in at the
+     west and goes out at the east; a dir<0 one the other way about. */
+  function buildCascadeCrossTable() {
+    var table = { W: [], E: [] }, n = RY.TRACKS.length;
+    ['W', 'E'].forEach(function (side) {
+      var posWay = side === 'W' ? 'in' : 'out', negWay = side === 'W' ? 'out' : 'in', i, j;
+      for (i = 0; i < n; i++) {
+        table[side][i] = [];
+        for (j = 0; j < n; j++) table[side][i][j] = cascadeClash(cascadeRoute(side, posWay, i), cascadeRoute(side, negWay, j));
+      }
+    });
+    return table;
+  }
   function buildCrossTable() {
+    if (LAY.cascade) return buildCascadeCrossTable();
     if (LAY.ladder) return buildLadderCrossTable();
     var sides = { W: [LAY.xWestHome, LAY.xThroatW], E: [LAY.xThroatE, LAY.xEastHome] };
     var table = {}, side, span, lo, hi, i, j;
@@ -1038,6 +1383,28 @@
   /* ---- the static segment list used to draw the permanent way ---- */
   RY.buildTrackwork = function () {
     var segs = [], t, i, offA, offB;
+
+    if (LAY.cascade) {
+      var cends = {};
+      ['W', 'E'].forEach(function (side) {
+        var e = cascadeEnd(side), end = side === 'W' ? LAY.xWestEnd : LAY.xEastEnd, id, q;
+        cends[side] = e;
+        // each main, from off-stage to where it bends onto the road beside it
+        segs.push(RY.makePath([{ x: end, y: e.yIn }, { x: ladX(side, CASC_LEAD), y: e.yIn }]));
+        segs.push(RY.makePath([{ x: end, y: e.yOut }, { x: ladX(side, CASC_LEAD), y: e.yOut }]));
+        for (id in e.pc) {
+          q = e.pc[id];
+          segs.push(RY.makePath(RY.sCurve(ladX(side, q.u0), q.y0, ladX(side, q.u1), q.y1, CURVE_N)));
+        }
+      });
+      // every road, from where its line begins at one end to the other
+      for (i = 0; i < RY.TRACKS.length; i++) {
+        t = RY.TRACKS[i];
+        segs.push(RY.makePath([{ x: ladX('W', cends.W.start[t.id]), y: t.y },
+                               { x: ladX('E', cends.E.start[t.id]), y: t.y }]));
+      }
+      return segs;
+    }
 
     if (LAY.ladder) {
       var p = LAY.ladder, yA = LAY.mainA, yB = LAY.mainB;

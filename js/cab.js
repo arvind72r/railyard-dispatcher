@@ -286,7 +286,7 @@
     w.solids.push({ kind: 'box', rgb: [176, 170, 156], top: [186, 180, 166], c: rect(tx - 24, ty - 24, tx + 24, ty + 24), z0: 52, z1: 76 });
     // the cabin and the P-way store
     w.solids.push({ kind: 'bldg', rgb: [201, 180, 138], c: rect(84, 902, 200, 962), z0: 0, z1: 46 });
-    w.solids.push({ kind: 'bldg', rgb: [124, 110, 88], c: rect(1492, 912, 1678, 970), z0: 0, z1: 40 });
+    w.solids.push({ kind: 'bldg', rgb: [124, 110, 88], c: rect(1492 + RY.W - 1920, 912, 1678 + RY.W - 1920, 970), z0: 0, z1: 40 });
   }
 
 
@@ -422,10 +422,12 @@
     var p = RY.pathAt(tr.path, cs), fwd = (v0.len - 8) / 2 - 6, lat = 0;
     EYE = 30;
     if (v0.kind === 'steam') {
-      // a steam engine's cab is behind its boiler: the driver stands on the
-      // left, higher up, and looks forward past it
+      // from a steam engine's footplate the boiler hides most of the line
+      // ahead, so ride up at the very front instead: over the buffer beam,
+      // on the centre line, just above the top of the smokebox — nothing
+      // of the engine itself in front of the view
       var g = RY.steamGeo(tr.cfg.steamClass || 'wp', v0.len);
-      fwd = g.boilerRear - 3; lat = -13; EYE = 49;
+      fwd = g.hl - 2; lat = 0; EYE = g.zB + g.rB + 5;
     }
     cam.a = p.a; cam.ca = Math.cos(p.a); cam.sa = Math.sin(p.a);
     cam.x = p.x + cam.ca * fwd - cam.sa * lat; cam.y = p.y + cam.sa * fwd + cam.ca * lat;
@@ -1097,22 +1099,6 @@
       for (j = 0; j < 8; j++) q.push(Vf(o, pn[0] + Math.cos(j * 0.785) * 1.1, rodV + side, pn[2] + Math.sin(j * 0.785) * 1.1));
       fillPoly(q, col([60, 62, 66], k, 1));
     });
-  }
-  /* Riding one: the boiler ahead of us, down the right-hand side of the view,
-     with its chimney at the far end — what the driver looks past. */
-  function ownBoiler(tr) {
-    var vh = tr.vehicles[0], g = RY.steamGeo(tr.cfg.steamClass || 'wp', vh.len), p = RY.pathAt(tr.path, Math.max(0, tr.s - vh.mid));
-    var o = { x: p.x, y: p.y, ca: Math.cos(p.a), sa: Math.sin(p.a) }, e = tr.cfg.engine || {};
-    var boiler = rgbOf(e.boiler || '#1d1e20'), bp = ringP(g.rB, g.zB, 14);
-    solid(o, [{ u: g.boilerRear + 1, p: bp }, { u: g.smokeRear, p: bp }], 0, function () { return boiler; });
-    solid(o, [{ u: g.smokeRear, p: bp }, { u: g.nose - 6, p: ringP(g.rB * 0.8, g.zB - 1, 14) }], 0, function () { return [22, 23, 25]; });
-    [g.boilerRear + 3, (g.boilerRear + g.smokeRear) / 2, g.smokeRear - 2].forEach(function (bu) {     // its bands
-      var pts = ringP(g.rB + 0.15, g.zB, 14).filter(function (q) { return q[1] > g.zB - 3; }).map(function (q) { return Vf(o, bu, q[0], q[1]); });
-      strokeLine(pts, col(rgbOf(e.bands || '#b9b6a8'), 0, 0.6), Math.max(0.5, 0.35 * focal / Math.max(10, pts[0].f)));
-    });
-    solid(o, [{ u: g.dome - 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }, { u: g.dome + 4.5, p: ringP(3.6, g.zB + g.rB + 1, 8, g.zB + g.rB - 1) }], 0,
-          function () { return shadeRgb(boiler, 0.1); });
-    solid(o, boxSecs(g.chimney - 3, g.chimney + 3, -3, 3, g.zB + g.rB - 1, g.zB + g.rB + g.chimH), 0, function () { return [10, 10, 11]; });
   }
 
   function drawVehicle(tr, vh, o, k, isFront, isRear) {
@@ -1877,7 +1863,6 @@
     items.sort(function (a, b) { return b.d - a.d; });
     items = painterOrder(items);
     for (i = 0; i < items.length; i++) items[i].fn();
-    if (target.vehicles[0].kind === 'steam') ownBoiler(target);
 
     console_(target, sigs, dirCam);
   }
