@@ -20,6 +20,7 @@ into islands are all different:
 | Northgate Junction (Realistic) | Advanced | 7 | The same roads, through a throat laid like a real one. |
 | Selby Yard            | Standard  | 4     | A through road at each end, one island between.|
 | Kaveripuram Junction  | Advanced  | 8     | An Indian junction: goods lines along both edges, six platforms on three islands. |
+| Kaveripuram Junction (Realistic) | Advanced | 8 | The same junction, every road stepped onto the next by crossovers; the map is shown a little smaller. |
 | Pazhayapuram Junction | Standard  | 5     | The same country in the age of steam: steam engines, semaphores, a diesel now and then. |
 
 An eighth, **MGR Chennai Central** (12 roads, a real terminus with a stabling
@@ -160,6 +161,46 @@ an Indian Railways station is:
   The locomotives wear their own livery rather than the train's, with ends
   to match instead of the warning yellow used elsewhere. All of this shows
   in the cab view too.
+
+### Kaveripuram Junction (Realistic) steps road to road
+
+The same station, roads, platforms and trains as Kaveripuram, with a
+different throat at each end (`throat: 'cascade'`, `planCascade` in
+`js/geom.js`). No road is curved straight off a main. Instead:
+
+- **The mains become roads.** At each end one main runs in and one runs out,
+  and each divides right by the home signal. One leg bends onto the road
+  beside it and carries on as that road; the other runs to the middle road
+  (4). At the west, the outgoing main A becomes road 3 and the incoming main
+  B becomes road 5; at the east it's the other way about.
+- **Departures cascade toward the out main**: road 1 runs onto road 2, road 2
+  onto road 3, and so on down to the road the main became. Departures from
+  the far side of the mains step across to road 4 and out off it.
+- **Arrivals step outward road by road**: off the in main onto the road
+  beside it and on, one crossover at a time. Those for the far side go in
+  along road 4 and across.
+- Where an arrival's crossover and a departure's share the gap between two
+  roads, the departure's lies nearer the signal.
+- **Each road's starter signal stands out by its own branch** (`RY.starterX`),
+  as close to where its departures leave as it safely can. A train waiting at
+  it, including a through train held there for the throat beyond, stands on
+  track that is its road's alone, clear of every other route's points. Each
+  starter is carried on an overhead-line mast.
+
+There are no diamonds anywhere. An arrival into a road never uses track a
+departure from a road beyond it needs, so, for example, a train arriving
+from the west into road 3 can run while one leaves road 2 for the west. That
+is the most simultaneous moves any layout of these roads can allow, and the
+same as plain Kaveripuram's. The two play alike; this one looks the way a
+real throat is worked.
+
+Stepping road to road takes room, so this station is laid in a world a
+third wider (`worldW: 2560`), and the map shows it a little smaller. The
+longest run of steps (from beyond the mains, through road 4, out to the
+outermost road) sets the length: its four crossovers are laid end to end
+down the throat, about 154 px each. Every other crossover stretches to fill
+its own gap, 180 to 230 px. The steepest point anywhere is gentler than the
+typical curve in the standard throat.
 
 ### Pazhayapuram Junction is the age of steam
 
@@ -430,6 +471,11 @@ mast and train in it is the same plan-view data the map is drawn from, stood
 up in perspective from a camera in the leading cab — so it can't disagree
 with the map, and it swings through a crossover exactly as the train's body
 does on the map.
+
+On a steam engine the boiler would hide most of the line ahead of the
+footplate, so the camera rides up at the very front instead: over the buffer
+beam, on the centre line, just above the top of the smokebox, with nothing of
+the engine in front of the view.
 
 - **Signals show their real aspect.** Approach a home signal you've been
   cleared past and it shows green; the starter at the end of your platform
