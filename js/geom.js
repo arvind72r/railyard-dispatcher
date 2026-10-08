@@ -400,8 +400,8 @@
   /* Kaveripuram (Realistic): the same station, roads and trains, through
      the cascade throat (see planCascade) — every road stepped onto the
      next by crossovers instead of curved straight off the mains. Its
-     throats need the length, so it's laid in a world a third wider than
-     the others and the map shows it a little smaller. Listed right after
+     throats need the length, so it's laid in a world half as wide again
+     as the others and the map shows it smaller. Listed right after
      the plain one. */
   (function () {
     var i, kv;
@@ -412,11 +412,12 @@
     real.name = 'Kaveripuram Junction (Realistic)';
     real.blurb = 'The same junction through a throat laid like a real one: every road stepped onto the next by crossovers.';
     real.throat = 'cascade';
-    real.worldW = 2560;
+    real.worldW = 2860;
     RY.STATIONS.splice(kv + 1, 0, real);
   })();
 
   var CENTER_Y = 555, TRACK_GAP = 130, BAND_HALF = 300, STOP_X = 920, SIDE_DECK = 40;
+  var layGen = 0;                       // bumped by applyStation, for caches built off the layout
 
   /* A terminus is not a reshaped through station: every road dead-ends at
      a buffer stop on the west, and the single throat — on the east —
@@ -595,8 +596,8 @@
      Positions run in u, inward from the home signal, mirrored at the two
      ends like the ladder's. */
   var CASC_LEAD = 26,      // home signal to where each main divides
-      CASC_BEND = 80,      // a main's bend onto the road beside it
-      CASC_WYE = 110,      // a main's other leg, onto the middle road
+      CASC_BEND = 200,     // a main's bend onto the road beside it — long, so a train running
+      CASC_WYE = 260,      // in at speed eases over; and its other leg, onto the middle road
       CASC_EDGE = 10,      // a bend's end to the first crossover off its road
       CASC_MARGIN = 16,    // end of the throat to the longest platform's ramp
       CASC_MIN_HOME = 110, // keep the home signal, and whoever waits at it, on stage
@@ -710,6 +711,7 @@
     for (i = 0; i < RY.STATIONS.length; i++) if (RY.STATIONS[i].id === id) def = RY.STATIONS[i];
     if (!def) def = RY.STATIONS[0];
     RY.W = def.worldW || 1920;          // a station with longer throats is laid in a wider world, shown smaller
+    layGen++;                           // anything cached off the old layout (RY.trackClear) is stale
     var geo = layoutStation(def);
 
     Object.keys(geo.lay).forEach(function (k) { LAY[k] = geo.lay[k]; });
@@ -1029,9 +1031,55 @@
      branch off: just past the branch, but past the fouling point of every
      other route that touches the line too, so a train standing at it
      stands on track that's its road's alone. */
-  RY.starterX = function (side, id) {
-    var dflt = side === 'W' ? LAY.xThroatW + 30 : LAY.xThroatE - 30;
-    if (!LAY.cascade) return dflt;
+  /* Is (x, y) at least r clear of every rail laid — somewhere a post can
+     stand? The trackwork is taken once per station. */
+  var clearOf = null;
+  RY.trackClear = function (x, y, r) {
+    if (!clearOf || clearOf.gen !== layGen) {
+      clearOf = { gen: layGen, segs: RY.buildTrackwork().map(function (P) {
+        var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        P.pts.forEach(function (q) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); });
+        return { pts: P.pts, x0: x0, y0: y0, x1: x1, y1: y1 };
+      }) };
+    }
+    return clearOf.segs.every(function (S) {
+      if (x < S.x0 - r || x > S.x1 + r || y < S.y0 - r || y > S.y1 + r) return true;
+      for (var i = 1; i < S.pts.length; i++) {
+        var a = S.pts[i - 1], b = S.pts[i], dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy || 1;
+        var t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / L2));
+        var qx = a.x + t * dx - x, qy = a.y + t * dy - y;
+        if (qx * qx + qy * qy < r * r) return false;
+      }
+      return true;
+    });
+  };
+  var POST_CLEAR = 18;     // a signal post or mast this far from any rail stands clear of the track
+
+  /* Where a starter actually stands: x along its road, and dy, which side
+     of it (the west starters stand on the north side, the east ones on the
+     south). In a cascade throat, crossovers run between the roads out
+     there, so a post that would land on one moves to the road's other
+     side, or failing that, back toward the platform until it's clear —
+     which only ever has a train stop a little sooner. */
+  RY.starterPos = function (side, id) {
+    var dy = side === 'W' ? -34 : 34, y = RY.TRACKS[id].y, k, s;
+    if (!LAY.cascade) return { x: side === 'W' ? LAY.xThroatW + 30 : LAY.xThroatE - 30, dy: dy };
+    var x = starterBase(side, id);
+    var p = LAY.cascade, key = side + id;
+    if (p._post && p._post[key]) return p._post[key];
+    var out = { x: x, dy: dy }, inw = side === 'W' ? 1 : -1;
+    search: for (k = 0; k <= 40; k++) {
+      for (s = 0; s < 2; s++) {
+        var d = s ? -dy : dy, xx = x + inw * k * 10;
+        if (RY.trackClear(xx, y + d, POST_CLEAR)) { out = { x: xx, dy: d }; break search; }
+      }
+    }
+    (p._post = p._post || {})[key] = out;
+    return out;
+  };
+
+  RY.starterX = function (side, id) { return RY.starterPos(side, id).x; };
+  function starterBase(side, id) {
     var p = LAY.cascade, key = side + id;
     if (p._starter && p._starter[key] !== undefined) return p._starter[key];
     var e = cascadeEnd(side), dep = cascadeRoute(side, 'out', id).steps;
@@ -1047,7 +1095,7 @@
     var x = ladX(side, u);
     (p._starter = p._starter || {})[key] = x;
     return x;
-  };
+  }
 
   /* Where a train coming in at `side` to road id has finished with the
      throat: its tail past the fouling point of its own last crossover, and

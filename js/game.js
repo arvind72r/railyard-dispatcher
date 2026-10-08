@@ -861,9 +861,11 @@
       // by itself clearance, or the signal would read green the moment
       // it's assigned a road, long before it's allowed to cross.
       var ready = o && (o.stops ? o.state === 'depart' : o.gateCleared);
-      var xE = RY.starterX('E', i), xW = RY.starterX('W', i);   // 30 in from each throat, or (a cascade) by the road's own branch
-      sig(xE, T[i].y + 34, ready && o.dir > 0 && !pastSignal(o, xE), 1, T[i].y);
-      sig(xW, T[i].y - 34, ready && o.dir < 0 && !pastSignal(o, xW), -1, T[i].y);
+      // 30 in from each throat, or (a cascade) by the road's own branch, on
+      // whichever side of the road its post is clear of the crossovers
+      var pE = RY.starterPos('E', i), pW = RY.starterPos('W', i);
+      sig(pE.x, T[i].y + pE.dy, ready && o.dir > 0 && !pastSignal(o, pE.x), 1, T[i].y);
+      sig(pW.x, T[i].y + pW.dy, ready && o.dir < 0 && !pastSignal(o, pW.x), -1, T[i].y);
     }
     return out;
   }

@@ -407,6 +407,7 @@
       for (s = 0; s < P.masts.length; s++) {                    // placed by scene.js drawOLE
         p = RY.pathAt(P, P.masts[s]);
         for (o = -1; o <= 1; o += 2) {
+          if (P.mastSides && !P.mastSides[s][(o + 1) / 2]) continue;   // on other track (scene.js drawOLE)
           w.masts.push({ x: p.x - Math.sin(p.a) * o * 31, y: p.y + Math.cos(p.a) * o * 31, wx: p.x, wy: p.y });
         }
       }

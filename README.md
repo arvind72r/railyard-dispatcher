@@ -20,7 +20,7 @@ into islands are all different:
 | Northgate Junction (Realistic) | Advanced | 7 | The same roads, through a throat laid like a real one. |
 | Selby Yard            | Standard  | 4     | A through road at each end, one island between.|
 | Kaveripuram Junction  | Advanced  | 8     | An Indian junction: goods lines along both edges, six platforms on three islands. |
-| Kaveripuram Junction (Realistic) | Advanced | 8 | The same junction, every road stepped onto the next by crossovers; the map is shown a little smaller. |
+| Kaveripuram Junction (Realistic) | Advanced | 8 | The same junction, every road stepped onto the next by crossovers; the map is shown smaller. |
 | Pazhayapuram Junction | Standard  | 5     | The same country in the age of steam: steam engines, semaphores, a diesel now and then. |
 
 An eighth, **MGR Chennai Central** (12 roads, a real terminus with a stabling
@@ -184,8 +184,16 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
 - **Each road's starter signal stands out by its own branch** (`RY.starterX`),
   as close to where its departures leave as it safely can. A train waiting at
   it, including a through train held there for the throat beyond, stands on
-  track that is its road's alone, clear of every other route's points. Each
-  starter is carried on an overhead-line mast.
+  track that is its road's alone, clear of every other route's points. A
+  starter whose post would stand on a crossover moves to the road's other
+  side, or back toward the platform, and no overhead-line mast is planted on
+  track (`RY.trackClear`).
+- **Trains follow each other in.** An arriving train frees its entry throat
+  once it is clear of every other route's points (`RY.entryClearX`), and the
+  next one waiting at the home signal is let in as soon as the one ahead is
+  past the track their two routes share (`RY.followClearX`). A train still
+  clearing the throat is checked against by every other move until it's
+  clear.
 
 There are no diamonds anywhere. An arrival into a road never uses track a
 departure from a road beyond it needs, so, for example, a train arriving
@@ -194,13 +202,17 @@ is the most simultaneous moves any layout of these roads can allow, and the
 same as plain Kaveripuram's. The two play alike; this one looks the way a
 real throat is worked.
 
-Stepping road to road takes room, so this station is laid in a world a
-third wider (`worldW: 2560`), and the map shows it a little smaller. The
-longest run of steps (from beyond the mains, through road 4, out to the
-outermost road) sets the length: its four crossovers are laid end to end
-down the throat, about 154 px each. Every other crossover stretches to fill
-its own gap, 180 to 230 px. The steepest point anywhere is gentler than the
-typical curve in the standard throat.
+Stepping road to road takes room, so this station is laid in a world half
+as wide again (`worldW: 2860`), and the map shows it smaller. Where each
+main divides by the home signal, both legs are long and easy (200 and 260
+px), so a train running in at speed eases over. The longest run of steps
+(from beyond the mains, through road 4, out to the outermost road) sets the
+crossovers' length: four laid end to end, about 167 px each. Every other
+crossover stretches to fill its own gap, 220 to 290 px, and a goods line,
+having no platform, lets its last crossover run on in toward the station, as
+long as a held through freight still fits clear of the throat it came in by.
+The steepest point anywhere is gentler than the typical curve in the
+standard throat.
 
 ### Pazhayapuram Junction is the age of steam
 
