@@ -18,6 +18,7 @@
      a stand instead of arriving with speed still on and clamping to zero. */
   var STOP_BRAKE = 76;
   var STATION_V = 100;         // permanent restriction over the pointwork
+  var SIGNAL_STAND = 26;       // how far short of a signal a train held at it stands, so its driver can read it
   RY.STATION_V = STATION_V;
 
   /* cars is the vehicle count, which is what platform capacity is measured in. */
@@ -216,7 +217,12 @@
     // busy when it gets there — right at the far exit signal (drawn 30px
     // inset from the ladder boundary, same as sSlow/sFast above), so a
     // held train's nose stops under the signal instead of drifting past it.
-    this.sFarGate = RY.sAtX(P, RY.starterX(this.dir > 0 ? 'E' : 'W', this.trackId || 0));
+    var exSide = this.dir > 0 ? 'E' : 'W', id = this.trackId || 0;
+    this.sFarGate = RY.sAtX(P, RY.starterX(exSide, id));
+    // where this road has a platform starter of its own, the advanced
+    // starter out at the branch is where a departure waits for the throat
+    var ps = RY.platStarterPos && RY.platStarterPos(exSide, id);
+    this.advS = ps ? this.sFarGate - SIGNAL_STAND : null;
   };
 
   Train.prototype.tailS = function () { return this.s - this.len; };

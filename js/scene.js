@@ -777,14 +777,20 @@
      in front of it from the cab. So a mast stands at each starter, carrying
      it, with the rest spread evenly between; a terminus road has only the
      east starter, and steps back from it. */
-  function roadMasts(len) {
-    var out = [], s, n, i, a = 30, b = len - 30;
+  function roadMasts(len, fixed) {
+    var out = [], s, n, i, j, a = 30, b = len - 30;
     if (L.terminus) {
       for (s = b; s > 20; s -= 170) out.unshift(s);
       return out;
     }
-    n = Math.max(1, Math.round((b - a) / 170));
-    for (i = 0; i <= n; i++) out.push(a + (b - a) * i / n);
+    // a mast at each signal on the road, and the rest spread evenly between
+    var at = [a].concat(fixed || [], [b]).filter(function (q) { return q > a - 1 && q < b + 1; })
+                .sort(function (p, q) { return p - q; });
+    for (j = 0; j < at.length - 1; j++) {
+      n = Math.max(1, Math.round((at[j + 1] - at[j]) / 170));
+      for (i = 0; i < n; i++) out.push(at[j] + (at[j + 1] - at[j]) * i / n);
+    }
+    out.push(b);
     return out;
   }
 
@@ -1259,7 +1265,13 @@
       var oleWest = L.terminus ? RY.platSpan(T[i]).x0 : RY.starterX('W', i) - 30;
       var oleEast = L.terminus ? L.xThroatE : RY.starterX('E', i) + 30;
       var road = RY.makePath([{ x: oleWest, y: T[i].y }, { x: oleEast, y: T[i].y }]);
-      road.masts = roadMasts(road.len);
+      // a cascade road's platform starters stand along it too, so they get
+      // a mast of their own rather than one landing in front of them
+      var fixed = L.terminus ? null : ['W', 'E'].map(function (sd) {
+        var q = RY.platStarterPos && RY.platStarterPos(sd, i);
+        return q && Math.abs(q.x - oleWest);
+      }).filter(function (q) { return q; });
+      road.masts = roadMasts(road.len, fixed);
       drawOLE(ctx, road);
     }
 
