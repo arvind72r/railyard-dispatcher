@@ -9,6 +9,10 @@
   var LEVEL_SECS = 68;          // real seconds per shift
   var LATE_MAX   = 8;           // minutes late before a service is cancelled
   var LATE_AFTER = 0.75;        // minutes past booked before one reads as late
+  /* A station whose throats are longer and slower to clear (geom.js
+     def.lateness — Kaveripuram (Realistic)) allows that much more on every
+     lateness threshold, and books its services that much more slack. */
+  function lateF() { return (RY.station && RY.station.lateness) || 1; }
   /* How far short of a red signal a train draws up. Stopped with its nose
      at the post, the driver's already past the head — it stands 34-42 to
      the side and well above eye level — so it's out of the cab view's
@@ -216,6 +220,18 @@
     if (tr.stops && !track.platform) return 'The through road has no platform';
     return null;
   }
+  /* Leaving the platform for the advanced starter: the only thing in the
+     way is another train still on that stretch of this same road — the
+     throat beyond is this train's to wait for, out at the branch. */
+  function departAheadBlocks(tr, ex) {
+    for (var i = 0; i < G.trains.length; i++) {
+      var o = G.trains[i];
+      if (o === tr || o.state === 'gone' || o.trackId !== tr.trackId) continue;
+      if (o.state === 'depRun' || o.state === 'depart' || o.state === 'routed') return true;
+    }
+    return false;
+  }
+
   function routeBlocked(tr, track) {
     var own = G.trackOwner[track.id];
     if (own) return track.short + ' occupied by ' + trName(own);
@@ -279,9 +295,10 @@
 
   function punctual(delay, base, tr, label) {
     var pts, tag, good;
-    if (delay <= LATE_AFTER) { pts = base;                                   tag = 'ON TIME';  good = true; }
-    else if (delay <= 2.5)  { pts = Math.round(base * (1 - delay * 0.15));  tag = '+' + delay.toFixed(1) + ' MIN'; good = true; }
-    else                    { pts = Math.max(15, Math.round(base - delay * 22)); tag = 'LATE ' + delay.toFixed(0) + ' MIN'; good = false; }
+    var f = lateF(), dn = delay / f;      // the delay as this station's allowances measure it
+    if (delay <= LATE_AFTER * f) { pts = base;                               tag = 'ON TIME';  good = true; }
+    else if (delay <= 2.5 * f)   { pts = Math.round(base * (1 - dn * 0.15)); tag = '+' + delay.toFixed(1) + ' MIN'; good = true; }
+    else                         { pts = Math.max(15, Math.round(base - dn * 22)); tag = 'LATE ' + delay.toFixed(0) + ' MIN'; good = false; }
 
     if (good) G.combo++; else { G.combo = 0; countLate(tr); }
     pts = Math.round(pts * mult());
@@ -297,7 +314,7 @@
     var m = tr.mid();
     G.score -= 250; G.combo = 0; G.lives--; G.events++;
     toast(m.x, m.y - 34, 'CANCELLED −250', 'bad');
-    banner('SERVICE CANCELLED', trName(tr) + ' held ' + LATE_MAX + ' minutes at the home signal');
+    banner('SERVICE CANCELLED', trName(tr) + ' held ' + Math.round(LATE_MAX * lateF()) + ' minutes at the home signal');
     release(tr);
     // A departure formed in the yard but never called forward is still
     // parked there, holding a stabling road that release() above never
@@ -373,7 +390,7 @@
       if (tr.cars > tk.maxCars || (tr.stops && !tk.platform)) continue;
       est = Math.max(est, tr.runTimeOn(RY.buildPath(dir, tk.y)));
     }
-    var slack = Math.max(1.2, 3.4 - (G.level - 1) * 0.24);
+    var slack = Math.max(1.2, 3.4 - (G.level - 1) * 0.24) * lateF();
     tr.sched = G.gameT + est + slack;
     tr.schedDep = tr.sched + tr.cfg.dwell;
     G.trains.push(tr);
@@ -489,7 +506,7 @@
   /* Overdue at the home signal, waiting on a road — what the register
      shows as DELAYED, and what turns into a strike if left long enough. */
   function overdue(tr) {
-    return tr.state === 'approach' && G.gameT - tr.sched > LATE_AFTER;
+    return tr.state === 'approach' && G.gameT - tr.sched > LATE_AFTER * lateF();
   }
 
   /* The top bar's count is a tally, not a gauge: each service is counted
@@ -515,7 +532,7 @@
 
     switch (tr.state) {
       case 'approach':
-        if (G.gameT - tr.sched > LATE_MAX) cancelService(tr);
+        if (G.gameT - tr.sched > LATE_MAX * lateF()) cancelService(tr);
         break;
 
       case 'routed':
@@ -587,12 +604,38 @@
 
       case 'awaitDepart':
         var ex = RY.station.terminus ? 'E' : (tr.dir > 0 ? 'E' : 'W');
+        // Where the road has a starter of its own at the platform end, a
+        // train leaves on that one as soon as the stretch up to its advanced
+        // starter is clear, and waits out there for the throat instead of in
+        // the platform — the throat is long, and holding the road meanwhile
+        // would make every service behind it late (geom.js platStarterPos).
+        if (tr.advS !== null && tr.advS !== undefined) {
+          if (!departAheadBlocks(tr, ex)) {
+            tr.state = 'depRun';
+            tr.targetS = tr.advS;
+            RY.audio.horn(RY.pathAt(tr.path, tr.s).x, tr.type === 'freight', tr.vehicles[0].kind === 'steam');
+            punctual(G.gameT - tr.schedDep, 75, tr, 'DEPARTED');
+          }
+          break;
+        }
         if (!throatConflict(ex, tr, tr.trackId)) {
           G.throat[ex][slotOf(tr.dir)] = tr; tr.holdsThroat[ex] = true;
           tr.state = 'depart';
           tr.targetS = Infinity;
           RY.audio.horn(RY.pathAt(tr.path, tr.s).x, tr.type === 'freight', tr.vehicles[0].kind === 'steam');
           punctual(G.gameT - tr.schedDep, 75, tr, 'DEPARTED');
+        }
+        break;
+
+      /* Out of the platform, running up its own road to the advanced
+         starter at the branch, where it waits for its route through the
+         throat. It still owns the road, so nothing is sent in behind it. */
+      case 'depRun':
+        var exr = tr.dir > 0 ? 'E' : 'W';
+        if (!throatConflict(exr, tr, tr.trackId)) {
+          G.throat[exr][slotOf(tr.dir)] = tr; tr.holdsThroat[exr] = true;
+          tr.state = 'depart';
+          tr.targetS = Infinity;
         }
         break;
 
@@ -866,6 +909,12 @@
       var pE = RY.starterPos('E', i), pW = RY.starterPos('W', i);
       sig(pE.x, T[i].y + pE.dy, ready && o.dir > 0 && !pastSignal(o, pE.x), 1, T[i].y);
       sig(pW.x, T[i].y + pW.dy, ready && o.dir < 0 && !pastSignal(o, pW.x), -1, T[i].y);
+      // where the road has one, its platform starter: clear once the train
+      // is away, the advanced starter above holding it for the throat
+      var qE = RY.platStarterPos('E', i), qW = RY.platStarterPos('W', i);
+      var away = o && (o.state === 'depRun' || o.state === 'depart' || o.gateCleared);
+      if (qE) sig(qE.x, T[i].y + qE.dy, away && o.dir > 0 && !pastSignal(o, qE.x), 1, T[i].y);
+      if (qW) sig(qW.x, T[i].y + qW.dy, away && o.dir < 0 && !pastSignal(o, qW.x), -1, T[i].y);
     }
     return out;
   }
@@ -932,8 +981,8 @@
         sub = d > LATE_AFTER ? 'call it forward \u2014 +' + d.toFixed(0) + ' min' : 'ready \u00b7 dep ' + fmtTime(tr.schedDep);
         col = d > 3 ? '#ff7a5c' : '#7ee0a0';
       } else {
-        sub = d > LATE_AFTER ? '+' + d.toFixed(0) + ' min late' : 'due ' + fmtTime(tr.sched);
-        col = d > 3 ? '#ff7a5c' : d > LATE_AFTER ? '#f0b429' : '#7ee0a0';
+        sub = d > LATE_AFTER * lateF() ? '+' + d.toFixed(0) + ' min late' : 'due ' + fmtTime(tr.sched);
+        col = d > 3 * lateF() ? '#ff7a5c' : d > LATE_AFTER * lateF() ? '#f0b429' : '#7ee0a0';
       }
       if (tr.stops) {
         mid = 'CALLS \u00b7 ' + eligible(tr).map(function (k) { return k.short; }).join(' ');

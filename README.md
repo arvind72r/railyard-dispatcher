@@ -194,6 +194,14 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
   past the track their two routes share (`RY.followClearX`). A train still
   clearing the throat is checked against by every other move until it's
   clear.
+- **Two signals to leave by.** Each platform also has a starter of its own at
+  its end (`RY.platStarterPos`), with the one at the branch as its advanced
+  starter. A train booked away leaves the platform on the first as soon as
+  the road ahead is clear, and waits at the second for its route through the
+  throat — so it is away on time instead of sitting in the platform holding
+  the road while the throat clears, and whatever is behind it can berth. A
+  goods line, whose crossovers reach in to the platform end, keeps the one
+  signal. Every signal has an overhead-line mast at it.
 
 There are no diamonds anywhere. An arrival into a road never uses track a
 departure from a road beyond it needs, so, for example, a train arriving
@@ -201,6 +209,12 @@ from the west into road 3 can run while one leaves road 2 for the west. That
 is the most simultaneous moves any layout of these roads can allow, and the
 same as plain Kaveripuram's. The two play alike; this one looks the way a
 real throat is worked.
+
+Its runs are longer and its throats slower to clear, so it allows half as
+much again on every lateness threshold and books its services that much more
+slack (`lateness: 1.5`, `lateF` in game.js): a service reads as late after
+about 1.1 minutes rather than 0.75, and is cancelled after 12 at the home
+signal rather than 8.
 
 Stepping road to road takes room, so this station is laid in a world half
 as wide again (`worldW: 2860`), and the map shows it smaller. Where each

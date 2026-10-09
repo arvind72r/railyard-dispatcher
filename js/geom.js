@@ -413,6 +413,7 @@
     real.blurb = 'The same junction through a throat laid like a real one: every road stepped onto the next by crossovers.';
     real.throat = 'cascade';
     real.worldW = 2860;
+    real.lateness = 1.5;                // longer runs and throat blocks: half as much again on lateness (game.js lateF)
     RY.STATIONS.splice(kv + 1, 0, real);
   })();
 
@@ -1079,6 +1080,33 @@
   };
 
   RY.starterX = function (side, id) { return RY.starterPos(side, id).x; };
+
+  /* A cascade throat is long, and a road's starter stands right out at its
+     own branch, so a train booked away would otherwise sit in the platform
+     holding the whole road while the throat cleared. Instead the platform
+     end gets a starter of its own, and the one at the branch becomes its
+     advanced starter: the train leaves the platform on this one, runs up
+     the road and waits at the branch for its route through the throat.
+     Null where the branch starter is already at the platform end (a goods
+     line, whose crossovers run in that far) — there one signal is enough. */
+  RY.platStarterPos = function (side, id) {
+    if (!LAY.cascade) return null;
+    var p = LAY.cascade, key = side + id;
+    if (p._plat && p._plat[key] !== undefined) return p._plat[key];
+    var inw = side === 'W' ? 1 : -1, y = RY.TRACKS[id].y, out = null;
+    var x0 = side === 'W' ? LAY.xThroatW + 30 : LAY.xThroatE - 30;
+    // far enough ahead of the branch starter to be a signal of its own
+    if ((RY.starterX(side, id) - x0) * inw < -60) {
+      for (var k = 0; k <= 30; k++) {
+        for (var s = 0; s < 2; s++) {
+          var dy = (s ? 34 : -34) * inw, xx = x0 - inw * k * 10;
+          if (RY.trackClear(xx, y + dy, POST_CLEAR)) { out = { x: xx, dy: dy }; k = 99; break; }
+        }
+      }
+    }
+    (p._plat = p._plat || {})[key] = out;
+    return out;
+  };
   function starterBase(side, id) {
     var p = LAY.cascade, key = side + id;
     if (p._starter && p._starter[key] !== undefined) return p._starter[key];
