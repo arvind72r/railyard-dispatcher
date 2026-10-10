@@ -202,6 +202,14 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
   A train leaving road 7 westward is clear of road 7 well before it has run
   out of the throat, so the next arrival can be given road 7 there and then
   and run straight in behind it.
+- **A train may enter while another is leaving.** Where the two routes share
+  no track at all, the arrival is let in at once. Where they do share some,
+  it is still let in — it runs into the throat and stands short of the
+  shared track (`throatHoldS`), going on as soon as the departure is off it,
+  rather than waiting at the home signal for the whole move. This cannot
+  deadlock: a departure only holds the throat once it has its own route and
+  is on its way out, so it is never itself waiting on the train being let
+  in.
 - **Two signals to leave by.** Each platform also has a starter of its own at
   its end (`RY.platStarterPos`), with the one at the branch as its advanced
   starter. A train booked away leaves the platform on the first as soon as

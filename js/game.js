@@ -248,11 +248,40 @@
     return false;
   }
 
+  /* A departure already running out of this end is not a reason to keep an
+     arrival standing at the home signal: the two meet only on the track
+     their routes share, which lies well inside. The arrival is let in and
+     held short of that track instead (throatHoldS), and goes on as soon as
+     the departure is off it. Safe from deadlock because a departure only
+     ever holds the throat once it has its own route and is on its way out,
+     so it is never itself waiting on the train being let in. */
+  function softBlocker(side, tr, trackId, opp) {
+    if (!L.cascade || RY.station.terminus || !opp || opp.trackId === null) return false;
+    var oppOut = side === 'W' ? opp.dir < 0 : opp.dir > 0;
+    var trIn = side === 'W' ? tr.dir > 0 : tr.dir < 0;
+    if (!oppOut || !trIn) return false;
+    if (opp.state !== 'depart' && opp.state !== 'routed') return false;
+    return RY.departClearX(side, opp.trackId, trackId) !== null;
+  }
+
+  /* How far such an arrival may run before the track it shares with
+     whatever is still coming out: Infinity once nothing is in the way. */
+  function throatHoldS(tr) {
+    if (!L.cascade || RY.station.terminus || tr.trackId === null || !tr.path) return Infinity;
+    var side = entSide(tr), opp = G.throat[side][slotOf(-tr.dir)], hold = Infinity;
+    if (!opp || !softBlocker(side, tr, tr.trackId, opp)) return Infinity;
+    if (!crosses(side, tr, tr.trackId, opp)) return Infinity;    // already off the shared track
+    var x = RY.departClearX(side, opp.trackId, tr.trackId);
+    hold = RY.sAtX(tr.path, x);
+    return hold;
+  }
+
   function routeBlocked(tr, track) {
     var own = G.trackOwner[track.id];
     if (own) return track.short + ' occupied by ' + trName(own);
     var ent = entSide(tr), side = ent === 'W' ? 'West' : 'East';
     var c = throatConflict(ent, tr, track.id);
+    if (c && c.crossing && softBlocker(ent, tr, track.id, c.train)) c = null;   // let in, held short
     if (c) {
       return c.crossing
         ? side + ' throat: ' + track.short + ' crosses ' + trName(c.train) + ' on ' + T[c.train.trackId].short
@@ -557,7 +586,9 @@
         break;
 
       case 'routed':
+        var holdS = throatHoldS(tr);
         if (tr.stops) {
+          tr.targetS = Math.min(tr.stopS, holdS);
           if (tr.s >= tr.stopS - 0.4 && tr.v < 0.6) {
             tr.state = 'dwell';
             tr.dwellUntil = G.gameT + tr.cfg.dwell;
@@ -593,13 +624,16 @@
               // it's in sight — but never so far short that the tail is
               // left in the entry throat, still holding it (updateResources)
               var clearS = RY.sAtX(tr.path, entryClearX(tr) + (tr.dir > 0 ? 4 : -4));
-              tr.targetS = tr.sFarGate - Math.max(0, Math.min(SIGNAL_SIGHT, tr.sFarGate - tr.len - clearS));
+              tr.farHoldS = tr.sFarGate - Math.max(0, Math.min(SIGNAL_SIGHT, tr.sFarGate - tr.len - clearS));
             } else {
               G.throat[farSide][slotOf(tr.dir)] = tr; tr.holdsThroat[farSide] = true;
-              tr.targetS = Infinity;                 // clear — run straight through
+              tr.farHoldS = Infinity;
               tr.gateCleared = true;
             }
           }
+          // whichever is nearer: the far throat's gate, or the track this
+          // end's outgoing train is still on
+          tr.targetS = Math.min(holdS, tr.farHoldS);
           if (!tr.passed) {
             var hx = tr.headX();
             if ((tr.dir > 0 && hx >= L.stopX) || (tr.dir < 0 && hx <= L.stopX)) {
