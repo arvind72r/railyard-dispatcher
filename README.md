@@ -202,6 +202,15 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
   A train leaving road 7 westward is clear of road 7 well before it has run
   out of the throat, so the next arrival can be given road 7 there and then
   and run straight in behind it.
+- **A train may follow another onto a road.** A road here runs on a long way
+  past its platform, so a train leaving it is still on it, by the signals,
+  well after it has left the platform. One arriving from the far end has
+  nowhere to be until the platform itself, so it may be given the road as
+  soon as the one leaving is past the platform starter at that end and
+  clear of where the newcomer berths (`roadFollowOK`) — it then runs in and
+  comes to a stand at the platform, well short of it. A train running
+  through still needs the whole road, and one arriving from the same end
+  the other is leaving by still waits for it to be off the road.
 - **Two signals to leave by.** Each platform also has a starter of its own at
   its end (`RY.platStarterPos`), with the one at the branch as its advanced
   starter. A train booked away leaves the platform on the first as soon as

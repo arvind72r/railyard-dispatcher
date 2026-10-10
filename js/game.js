@@ -248,9 +248,30 @@
     return false;
   }
 
+  /* A road in a cascade throat runs on a long way past its platform, so a
+     train leaving it is still on it, by the signals, long after it has
+     left the platform — and the one coming the other way along it has
+     nowhere to be until the platform itself. One arriving the same way
+     behind it may follow it onto the road as soon as it is past the
+     platform starter at that end and clear of where the newcomer berths:
+     the platform section is then its own, and it comes to a stand well
+     short of the train ahead. Only for a train that berths — one running
+     through needs the whole road. */
+  var BERTH_GAP = 40;
+  function roadFollowOK(tr, track, own) {
+    if (!L.cascade || RY.station.terminus || !tr.stops) return false;
+    if (!own || own.dir !== tr.dir || own.trackId !== track.id) return false;
+    if (own.state !== 'depRun' && own.state !== 'depart' && own.state !== 'routed') return false;
+    var q = RY.platStarterPos(own.dir > 0 ? 'E' : 'W', track.id);
+    if (!q) return false;
+    var nose = tr.berthHeadX(), t = own.tailX();
+    return own.dir > 0 ? t >= Math.max(q.x, nose + BERTH_GAP)
+                       : t <= Math.min(q.x, nose - BERTH_GAP);
+  }
+
   function routeBlocked(tr, track) {
     var own = G.trackOwner[track.id];
-    if (own) return track.short + ' occupied by ' + trName(own);
+    if (own && !roadFollowOK(tr, track, own)) return track.short + ' occupied by ' + trName(own);
     var ent = entSide(tr), side = ent === 'W' ? 'West' : 'East';
     var c = throatConflict(ent, tr, track.id);
     if (c) {
