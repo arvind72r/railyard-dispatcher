@@ -174,7 +174,6 @@
     // routine release of holdsThroat far downstream can't be mistaken for
     // a fresh arrival at the gate and yank the train backwards.
     this.gateCleared = false;
-    this.farHoldS = Infinity;    // where the far throat's gate holds a through train, once it's looked
 
     // Terminus-only: a service formed in the yard rather than arriving off
     // the main starts parked on a yard road (see game.js's scheduleTimetable),
