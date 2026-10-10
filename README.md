@@ -209,8 +209,10 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
   soon as the one leaving is past the platform starter at that end and
   clear of where the newcomer berths (`roadFollowOK`) — it then runs in and
   comes to a stand at the platform, well short of it. A train running
-  through still needs the whole road, and one arriving from the same end
-  the other is leaving by still waits for it to be off the road.
+  through comes in the same way and stands at that platform starter
+  (`roadHoldS`) until the road beyond it is clear too. One arriving from the
+  same end the other is leaving by still waits for it to be off the road:
+  the two would meet head on.
 - **Two signals to leave by.** Each platform also has a starter of its own at
   its end (`RY.platStarterPos`), with the one at the branch as its advanced
   starter. A train booked away leaves the platform on the first as soon as
