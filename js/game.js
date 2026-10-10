@@ -18,6 +18,7 @@
      the side and well above eye level — so it's out of the cab view's
      picture; this far back it's squarely in it. */
   var SIGNAL_SIGHT = 80;
+  var SIGNAL_STAND = 26;        // how far short of a signal a train held at it stands
   var MINS_PER_SEC = 1;         // station clock runs a minute a second
 
   var cv  = document.getElementById('cv');
@@ -259,14 +260,34 @@
      through needs the whole road. */
   var BERTH_GAP = 40;
   function roadFollowOK(tr, track, own) {
-    if (!L.cascade || RY.station.terminus || !tr.stops) return false;
+    if (!L.cascade || RY.station.terminus) return false;
     if (!own || own.dir !== tr.dir || own.trackId !== track.id) return false;
     if (own.state !== 'depRun' && own.state !== 'depart' && own.state !== 'routed') return false;
     var q = RY.platStarterPos(own.dir > 0 ? 'E' : 'W', track.id);
     if (!q) return false;
-    var nose = tr.berthHeadX(), t = own.tailX();
+    // where the newcomer comes to rest: its berth, or — running through —
+    // that same platform starter, which it stands at until the road beyond
+    // is clear too (roadHoldS)
+    var nose = tr.stops ? tr.berthHeadX() : q.x, t = own.tailX();
     return own.dir > 0 ? t >= Math.max(q.x, nose + BERTH_GAP)
                        : t <= Math.min(q.x, nose - BERTH_GAP);
+  }
+
+  /* A train running through a road another is still leaving stands at that
+     road's platform starter until the road beyond it is clear, rather than
+     needing the whole road to itself before it may come in at all. */
+  function roadHoldS(tr) {
+    if (!L.cascade || RY.station.terminus || tr.stops || tr.trackId === null || !tr.path) return Infinity;
+    var ex = tr.dir > 0 ? 'E' : 'W', q = RY.platStarterPos(ex, tr.trackId);
+    if (!q) return Infinity;
+    var x = RY.roadClearX(ex, tr.trackId), i, o, t;
+    for (i = 0; i < G.trains.length; i++) {
+      o = G.trains[i];
+      if (o === tr || o.state === 'gone' || o.trackId !== tr.trackId || o.dir !== tr.dir || !o.holdsTrack) continue;
+      t = o.tailX();
+      if (ex === 'W' ? t > x : t < x) return RY.sAtX(tr.path, q.x) - SIGNAL_STAND;   // still on the road ahead
+    }
+    return Infinity;
   }
 
   function routeBlocked(tr, track) {
@@ -614,13 +635,16 @@
               // it's in sight — but never so far short that the tail is
               // left in the entry throat, still holding it (updateResources)
               var clearS = RY.sAtX(tr.path, entryClearX(tr) + (tr.dir > 0 ? 4 : -4));
-              tr.targetS = tr.sFarGate - Math.max(0, Math.min(SIGNAL_SIGHT, tr.sFarGate - tr.len - clearS));
+              tr.farHoldS = tr.sFarGate - Math.max(0, Math.min(SIGNAL_SIGHT, tr.sFarGate - tr.len - clearS));
             } else {
               G.throat[farSide][slotOf(tr.dir)] = tr; tr.holdsThroat[farSide] = true;
-              tr.targetS = Infinity;                 // clear — run straight through
+              tr.farHoldS = Infinity;                // clear — run straight through
               tr.gateCleared = true;
             }
           }
+          // whichever stops it first: the far throat's gate, or the road
+          // ahead still being another's
+          tr.targetS = Math.min(tr.farHoldS, roadHoldS(tr));
           if (!tr.passed) {
             var hx = tr.headX();
             if ((tr.dir > 0 && hx >= L.stopX) || (tr.dir < 0 && hx <= L.stopX)) {
