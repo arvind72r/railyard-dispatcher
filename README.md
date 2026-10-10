@@ -194,6 +194,14 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
   past the track their two routes share (`RY.followClearX`). A train still
   clearing the throat is checked against by every other move until it's
   clear.
+- **A road is free the moment its train is off it.** An arrival and a
+  departure at the same end cross the throat by quite separate crossovers,
+  so the one leaving stops standing in the other's way as soon as it is off
+  the track they share (`RY.departClearX`), and its road and platform are
+  free as soon as its route has taken it off that road (`RY.roadClearX`).
+  A train leaving road 7 westward is clear of road 7 well before it has run
+  out of the throat, so the next arrival can be given road 7 there and then
+  and run straight in behind it.
 - **Two signals to leave by.** Each platform also has a starter of its own at
   its end (`RY.platStarterPos`), with the one at the branch as its advanced
   starter. A train booked away leaves the platform on the first as soon as
