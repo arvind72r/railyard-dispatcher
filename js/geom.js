@@ -1148,6 +1148,55 @@
     return x;
   };
 
+  /* The track two routes through one end share, as a span of u: the piece
+     both take, or the stretch of a road both run along. Null when they
+     share none — they can then run at once whatever either is doing. */
+  function cascadeShared(r1, r2, pc) {
+    var lo = Infinity, hi = -Infinity;
+    r1.steps.forEach(function (a) {
+      r2.steps.forEach(function (b) {
+        var u0, u1;
+        if (a.piece && a.piece === b.piece) { u0 = pc[a.piece].u0; u1 = pc[a.piece].u1; }
+        else if (!a.piece && !b.piece && a.road === b.road && a.a <= b.b + 0.5 && b.a <= a.b + 0.5) {
+          u0 = Math.max(a.a, b.a); u1 = Math.min(a.b, b.b);
+        } else return;
+        lo = Math.min(lo, u0); hi = Math.max(hi, u1);
+      });
+    });
+    return lo <= hi ? { u0: lo, u1: hi } : null;
+  }
+
+  /* An arrival and a departure at the same end run over quite separate
+     crossovers here, so the one leaving stops standing in the other's way
+     as soon as it is off the track they share. This is where: once a
+     departure from road `dep` has its tail outside this, an arrival to
+     road `arr` can be let in behind it and run straight to its platform.
+     Null when the two share nothing at all. */
+  RY.departClearX = function (side, dep, arr) {
+    var p = LAY.cascade;
+    if (!p) return null;
+    var key = side + dep + '>' + arr;
+    if (p._dclear && p._dclear[key] !== undefined) return p._dclear[key];
+    var sh = cascadeShared(cascadeRoute(side, 'out', dep), cascadeRoute(side, 'in', arr), cascadeEnd(side).pc);
+    var x = sh ? ladX(side, sh.u0 - CASC_FOUL) : null;
+    (p._dclear = p._dclear || {})[key] = x;
+    return x;
+  };
+
+  /* Where a departure from road `id` is off that road's own track, so the
+     road itself — and the platform it leads to — is free for the next
+     train, whatever the rest of the throat is doing. */
+  RY.roadClearX = function (side, id) {
+    var p = LAY.cascade;
+    if (!p) return null;
+    var key = side + id;
+    if (p._rclear && p._rclear[key] !== undefined) return p._rclear[key];
+    var steps = cascadeRoute(side, 'out', id).steps;
+    var x = ladX(side, steps[steps.length - 1].a - CASC_FOUL);
+    (p._rclear = p._rclear || {})[key] = x;
+    return x;
+  };
+
   /* Two trains coming in at the same end, one behind the other: where
      the one in front (bound for road lead) must have its tail past before
      the one behind (bound for road follow) can be let in. That's just past

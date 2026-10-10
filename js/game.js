@@ -171,7 +171,23 @@
     if (!opp) return false;
     var posId = tr.dir > 0 ? trackId : opp.trackId;
     var negId = tr.dir > 0 ? opp.trackId : trackId;
-    return RY.crossTable[side][posId][negId];
+    if (!RY.crossTable[side][posId][negId]) return false;
+    return !departedClear(side, tr, trackId, opp);
+  }
+  /* In a cascade throat an arrival and a departure cross the throat by
+     quite separate crossovers, so one leaving stops standing in the
+     other's way the moment it is off the track they share — a train can
+     then be let in behind it rather than waiting for it to run right out
+     (geom.js RY.departClearX). Only the train on its way out counts:
+     one still coming in is heading for the track it shares. */
+  function departedClear(side, tr, trackId, opp) {
+    if (!L.cascade || RY.station.terminus) return false;
+    var oppOut = side === 'W' ? opp.dir < 0 : opp.dir > 0;   // which way through this end it's going
+    var trIn = side === 'W' ? tr.dir > 0 : tr.dir < 0;
+    if (!oppOut || !trIn || opp.trackId === null) return false;
+    if (opp.state !== 'depRun' && opp.state !== 'depart' && opp.state !== 'routed') return false;
+    var x = RY.departClearX(side, opp.trackId, trackId), tx = opp.tailX();
+    return x !== null && (side === 'W' ? tx <= x : tx >= x);
   }
 
   /* Is `side` (W/E) free for `tr` to use against road id `trackId`? Two
@@ -494,7 +510,12 @@
       if (out) { tr.holdsThroat[ent] = false; if (G.throat[ent][slot] === tr) G.throat[ent][slot] = null; dropTrail(tr, ent); }
     }
     if (tr.holdsTrack && (tr.state === 'depart' || !tr.stops)) {
-      var off = tr.dir > 0 ? (tx >= L.xThroatE) : (tx <= L.xThroatW);
+      // off its road and away: in a cascade throat that's as soon as its
+      // tail is past where its route leaves the road (RY.roadClearX), not
+      // once it's run the whole throat — the platform behind it is free
+      var roadX = L.cascade && tr.trackId !== null ? RY.roadClearX(ex, tr.trackId) : null;
+      var off = roadX !== null ? (ex === 'W' ? tx <= roadX : tx >= roadX)
+                               : (tr.dir > 0 ? (tx >= L.xThroatE) : (tx <= L.xThroatW));
       if (off) { tr.holdsTrack = false; if (G.trackOwner[tr.trackId] === tr) G.trackOwner[tr.trackId] = null; }
     }
     if (tr.holdsThroat[ex]) {
