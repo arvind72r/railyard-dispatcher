@@ -258,7 +258,10 @@
 
   Train.prototype.step = function (dt) {
     if (this.targetS !== Infinity && this.targetS - this.s <= 0) {
-      this.s = this.targetS; this.v = 0; return;
+      // close up a slight overshoot, but never drag a train back down the
+      // line: a target well behind us is a stale hold, not a destination
+      if (this.s - this.targetS < 6) this.s = this.targetS;
+      this.v = 0; return;
     }
     var lim = Math.min(this.ceiling(this.s), this.limitAt(this.s + 60));
     if (this.v < lim) this.v = Math.min(lim, this.v + ACC * dt);

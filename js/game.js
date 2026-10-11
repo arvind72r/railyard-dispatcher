@@ -280,12 +280,18 @@
     if (!L.cascade || RY.station.terminus || tr.stops || tr.trackId === null || !tr.path) return Infinity;
     var ex = tr.dir > 0 ? 'E' : 'W', q = RY.platStarterPos(ex, tr.trackId);
     if (!q) return Infinity;
+    var hx = tr.headX();
+    // once its nose is past that signal it is in the section beyond, and
+    // this hold is spent — it must never pull a train back down the line
+    if (ex === 'W' ? hx <= q.x : hx >= q.x) return Infinity;
+    var holdS = RY.sAtX(tr.path, q.x) - SIGNAL_STAND;
     var x = RY.roadClearX(ex, tr.trackId), i, o, t;
     for (i = 0; i < G.trains.length; i++) {
       o = G.trains[i];
       if (o === tr || o.state === 'gone' || o.trackId !== tr.trackId || o.dir !== tr.dir || !o.holdsTrack) continue;
       t = o.tailX();
-      if (ex === 'W' ? t > x : t < x) return RY.sAtX(tr.path, q.x) - SIGNAL_STAND;   // still on the road ahead
+      if (ex === 'W' ? t >= hx : t <= hx) continue;  // behind us: it's the one following
+      if (ex === 'W' ? t > x : t < x) return holdS;  // still on the road ahead
     }
     return Infinity;
   }
