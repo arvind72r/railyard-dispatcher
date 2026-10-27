@@ -417,6 +417,30 @@
     RY.STATIONS.splice(kv + 1, 0, real);
   })();
 
+  /* Pazhayapuram (Realistic): the steam-era station through the same
+     cascade throat. Its five roads fall two, one, two about the mains,
+     which is what planCascade wants, and its roads sit further apart than
+     Kaveripuram's, so each crossover has further to travel and wants the
+     room. Semaphores all through, as at the plain one. */
+  (function () {
+    var i, pz;
+    for (i = 0; i < RY.STATIONS.length; i++) if (RY.STATIONS[i].id === 'pazhayapuram') pz = i;
+    var real = {};
+    Object.keys(RY.STATIONS[pz]).forEach(function (k) { real[k] = RY.STATIONS[pz][k]; });
+    real.id = 'pazhayapuram-real';
+    real.name = 'Pazhayapuram Junction (Realistic)';
+    real.blurb = 'The age of steam, through a throat laid like a real one: every road stepped onto the next by crossovers.';
+    real.throat = 'cascade';
+    // its roads sit square about the mains here, so the middle road is
+    // midway between them and each main's bend onto the road beside it is
+    // the same, gentle, curve — the plain station's band leaves the middle
+    // road almost alongside one main, which a cascade throat has no use for
+    real.band = [295, 815];
+    real.worldW = 2860;
+    real.lateness = 1.5;                // longer runs and throat blocks: half as much again on lateness (game.js lateF)
+    RY.STATIONS.splice(pz + 1, 0, real);
+  })();
+
   var CENTER_Y = 555, TRACK_GAP = 130, BAND_HALF = 300, STOP_X = 920, SIDE_DECK = 40;
   var layGen = 0;                       // bumped by applyStation, for caches built off the layout
 

@@ -22,8 +22,9 @@ into islands are all different:
 | Kaveripuram Junction  | Advanced  | 8     | An Indian junction: goods lines along both edges, six platforms on three islands. |
 | Kaveripuram Junction (Realistic) | Advanced | 8 | The same junction, every road stepped onto the next by crossovers; the map is shown smaller. |
 | Pazhayapuram Junction | Standard  | 5     | The same country in the age of steam: steam engines, semaphores, a diesel now and then. |
+| Pazhayapuram Junction (Realistic) | Standard | 5 | The same steam-era station, every road stepped onto the next by crossovers. |
 
-An eighth, **MGR Chennai Central** (12 roads, a real terminus with a stabling
+A tenth, **MGR Chennai Central** (12 roads, a real terminus with a stabling
 yard), is built and working but **not currently on the menu** — a different
 style of play is being worked out for it. It is hidden by a single `hidden:
 true` on its entry in `js/geom.js`; nothing else about it is switched off,
@@ -304,9 +305,35 @@ that runs through it belong to the steam era:
 - **The sound.** A steam engine sounds a chime whistle instead of a horn,
   pitched lower on a goods engine. You hear its exhaust beat, each chuff
   deeper and louder when it's working hard and quickening with speed.
-- **Riding one.** In a steam engine's cab you stand on the driver's side,
-  higher up, looking forward past the boiler, with its bands, dome and
-  chimney, and the smoke ahead of you.
+- **Riding one.** The boiler would fill the view from the footplate, so the
+  camera rides at the very front instead: over the buffer beam, on the centre
+  line, just above the top of the smokebox, with nothing of the engine in
+  front of you and its smoke going up behind.
+
+### Pazhayapuram Junction (Realistic) steps road to road
+
+The steam-era station through the same cascade throat as Kaveripuram
+(Realistic) — mains that become the road beside them, departures cascading
+toward the out main, arrivals stepping outward one crossover at a time, and
+no diamonds anywhere. Everything else is the plain station's: the same five
+roads, the same WP and WG engines, the same semaphores, and the same stone
+platforms under their cast-iron canopies.
+
+Two things are its own:
+
+- **Its roads sit square about the mains.** The plain station's `band` leaves
+  the middle road almost alongside one main, which is no use to a throat that
+  crosses there, so this one uses `band: [295, 815]`. Platform 3 then lies
+  midway between the mains and each main's bend onto the road beside it is
+  the same gentle curve.
+- **Its roads are further apart** than Kaveripuram's — 130 against 85 — so
+  every crossover has further to travel. Laid in the same width of world
+  (`worldW: 2860`), its crossovers come out 200 to 391 long and the steepest
+  point anywhere is 0.80, gentler than Kaveripuram (Realistic)'s 0.98 and
+  well under the 1.36 of a standard throat.
+
+It allows the same half-as-much-again on lateness (`lateness: 1.5`), for the
+same reason: longer runs, and throats that take longer to clear.
 
 ### MGR Chennai Central is a different kind of station
 
