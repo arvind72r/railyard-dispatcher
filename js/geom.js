@@ -631,7 +631,8 @@
       CASC_MIN_STEP = 80,  // shorter than this and a coach would be on two crossovers at once
       CASC_FIT = 700,      // the longest through train, held at a starter, must stand clear of the throats
       CASC_FOUL = 80,      // a crossover's legs are a vehicle's width apart this far from its points
-      CASC_PAST = 30;      // a road's line begins this far past where its lead crossed it
+      CASC_PAST = 80,      // a road's line begins this far past where its lead crossed it
+      CASC_TURN = 40;      // the first road off a lead turns off this far along it, clear of the main
   function planCascade(tracks, mainA, mainB, room) {
     var upper = [], lower = [], middle = [];
     tracks.forEach(function (t) {
@@ -938,30 +939,47 @@
      Each road therefore carries two junctions, one for each stream. */
   function cascPts(side, q, t1) {
     if (q.kind === 'lead') return ladLeadPts(side, q.fan, t1 === undefined ? 1 : t1);
-    if (q.kind === 'branch') return ladBranchPts(side, q.br);
+    if (q.kind === 'branch') return cascBranchPts(side, q.br);
     return RY.sCurve(ladX(side, q.u0), q.y0, ladX(side, q.u1), q.y1, CURVE_N);
   }
   /* A lead from (u0, y0) out to the last of `roads`, with every earlier
      road branching off it. Shortened until each road has been joined
      before its platform begins (lim). */
-  /* Where a road turns off a lead. The lead passes that road's level at
-     uc; the turnout goes a little before, and its curve lands a little
-     after, so the road's own line begins past where the lead crossed it
-     and the two never cross. Among the places that would do, take the one
-     whose curve leaves tangent to the lead. */
-  function cascBranchAt(W, L, tMin, w, u0) {
-    var tc = invSmooth(w / W), uc = u0 + tc * L;
-    var lo = Math.max(tMin, 0) + 1e-4, hi = tc - 1e-4, m, k;
-    function at(t) {
-      var wt = W * smooth(t), sl = Math.max(1e-6, W * dsmooth(t) / L);
-      return { t: t, wt: wt, s: sl, len: LAD_ALPHA * (w - wt) / sl };
+  /* Where a road turns off a lead, and the curve it takes.
+
+     The lead passes that road's level at uc, so the road's own line has to
+     begin past that point or the lead would cross it. The curve is laid as
+     the lead's own shape less a swell that grows from nothing: it leaves
+     tangent to the lead, is never on the far side of it, and arrives level
+     on the road. Made as long as that allows, which is a few times the
+     clearance past the crossing — long and lazy, like the lead itself. */
+  function leadOff(W, L, u0, u) { return W * smooth(Math.max(0, Math.min(1, (u - u0) / L))); }
+  function leadSlope(W, L, u0, u) { return W * dsmooth(Math.max(0, Math.min(1, (u - u0) / L))) / L; }
+  function cascBranchAt(W, L, tMin, w, u0, cap) {
+    var uc = u0 + invSmooth(w / W) * L;
+    var uLand = Math.min(uc + CASC_PAST, cap);
+    if (uLand <= uc + 4) uLand = uc + 4;
+    var D = Math.max(0.5, leadOff(W, L, u0, uLand) - w);
+    var sl = Math.max(1e-6, leadSlope(W, L, u0, uLand));
+    // h(f) = a f^2 + b f^3 rises from nothing to 1 and meets the road level;
+    // it only stays on the near side while its end slope H1 is at most 3
+    var earliest = u0 + Math.max(tMin, CASC_TURN / L) * L;
+    var len = Math.max(40, Math.min(3 * D / sl, uLand - earliest));
+    var uLeave = uLand - len;
+    return { t: (uLeave - u0) / L, wt: leadOff(W, L, u0, uLeave), D: D, H1: sl * len / D,
+             u0: uLeave, u1: uLand, len: len };
+  }
+  /* The points of such a curve. */
+  function cascBranchPts(side, br) {
+    var f = br.fan, L = f.u1 - f.u0, W = Math.abs(f.y1 - f.y0), sg = f.sg;
+    var a = 3 - br.H1, b = br.H1 - 2, n = 64, pts = [], i, t, u, h;
+    for (i = 0; i <= n; i++) {
+      t = i / n;
+      u = br.u0 + t * (br.u1 - br.u0);
+      h = a * t * t + b * t * t * t;
+      pts.push({ x: ladX(side, u), y: f.y0 + sg * (leadOff(W, L, f.u0, u) - br.D * h) });
     }
-    function want(t) { return uc + CASC_PAST - (u0 + t * L); }   // to land just past the crossing
-    function land(r) { r.len = Math.max(24, want(r.t)); return r; }
-    if (hi <= lo) return land(at(Math.max(0, hi)));
-    if (at(lo).len <= want(lo)) return land(at(lo));
-    for (k = 0; k < 50; k++) { m = (lo + hi) / 2; if (at(m).len > want(m)) lo = m; else hi = m; }
-    return land(at((lo + hi) / 2));
+    return pts;
   }
   function cascFan(key, u0, y0, roads, room, lim) {
     var n = roads.length, outer = roads[n - 1];
@@ -971,9 +989,9 @@
       fan = { key: key, u0: u0, u1: u0 + L, y0: y0, y1: outer.y, sg: sg, branches: [] };
       var tMin = 0, worst = 1;
       for (k = 0; k < n - 1; k++) {
-        var w = Math.abs(roads[k].y - y0), br = cascBranchAt(W, L, tMin, w, u0);
-        var b = { road: roads[k].id, t: br.t, u0: u0 + br.t * L, u1: u0 + br.t * L + br.len,
-                  y0: y0 + sg * br.wt, y1: roads[k].y, m0t: sg * br.s * br.len };
+        var w = Math.abs(roads[k].y - y0), br = cascBranchAt(W, L, tMin, w, u0, lim(roads[k]));
+        var b = { road: roads[k].id, t: br.t, u0: br.u0, u1: br.u1, D: br.D, H1: br.H1,
+                  fan: fan, y0: y0 + sg * br.wt, y1: roads[k].y };
         fan.branches.push(b);
         var cap = lim(roads[k]);
         if (b.u1 > cap) worst = Math.min(worst, Math.max(0.2, (cap - u0) / (b.u1 - u0)));
@@ -1332,7 +1350,7 @@
         pts = cascPts(side, q);
         if (q.kind === 'branch') {
           fan = pc[q.fk].fan; L = fan.u1 - fan.u0;
-          out.push(ladFrame(pts[0], inw, fan.sg * Math.abs(fan.y1 - fan.y0) * dsmooth(q.br.t) / L, pts[3]));
+          out.push(ladFrame(pts[0], inw, fan.sg * leadSlope(Math.abs(fan.y1 - fan.y0), L, fan.u0, q.br.u0), pts[3]));
         } else if (q.kind === 'curve') {
           out.push(ladFrame(pts[pts.length - 1], -inw, 0, pts[pts.length - 5]));
         } else {

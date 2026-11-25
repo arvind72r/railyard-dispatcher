@@ -158,9 +158,12 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
   across anything — and the throat reaches the corner of the map instead of
   leaving it empty.
 - **The nearer roads branch off that lead**, each at a turnout of its own,
-  in the order the lead passes them. Each branch lands just past where its
-  lead crossed that road's level, so the road's own line begins beyond the
-  crossing and the two never cross.
+  in the order the lead passes them. Each curve is the lead's own shape less
+  a swell that grows from nothing: it leaves tangent to the lead, can never
+  be on the far side of it, and arrives level on its road, a little past
+  where the lead crossed that road's level — so the road's own line begins
+  beyond the crossing and the two never cross. They come out as long and as
+  lazy as the lead itself, 200 to 260 against a lead's 880.
 - **The far side is reached across the middle road**: off the main's other
   leg onto road 4, then road to road, one crossover at a time. A lead out of
   the middle road would have to cross roads this end's own lead has already
