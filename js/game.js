@@ -173,7 +173,7 @@
     var posId = tr.dir > 0 ? trackId : opp.trackId;
     var negId = tr.dir > 0 ? opp.trackId : trackId;
     if (!RY.crossTable[side][posId][negId]) return false;
-    return !departedClear(side, tr, trackId, opp);
+    return !departedClear(side, tr, trackId, opp) && !arrivedClear(side, tr, trackId, opp);
   }
   /* In a cascade throat an arrival and a departure cross the throat by
      quite separate crossovers, so one leaving stops standing in the
@@ -189,6 +189,22 @@
     if (opp.state !== 'depRun' && opp.state !== 'depart' && opp.state !== 'routed') return false;
     var x = RY.departClearX(side, opp.trackId, trackId), tx = opp.tailX();
     return x !== null && (side === 'W' ? tx <= x : tx >= x);
+  }
+
+  /* The mirror of it: one still running in stops standing in a departure's
+     way once its tail is past the track the two share (geom.js
+     RY.arriveClearX), rather than when it is clear of the whole throat.
+     That tells most for a train run out along a lead to the far road, which
+     is on the lead — the track every road off it is reached by — the whole
+     way in. Only the train on its way in counts: one on its way out is the
+     other case above. */
+  function arrivedClear(side, tr, trackId, opp) {
+    if (!L.cascade || RY.station.terminus) return false;
+    var oppIn = side === 'W' ? opp.dir > 0 : opp.dir < 0;     // which way through this end it's going
+    var trOut = side === 'W' ? tr.dir < 0 : tr.dir > 0;
+    if (!oppIn || !trOut || opp.trackId === null || opp.state === 'approach') return false;
+    var x = RY.arriveClearX(side, opp.trackId, trackId), tx = opp.tailX();
+    return x !== null && (side === 'W' ? tx >= x : tx <= x);
   }
 
   /* Is `side` (W/E) free for `tr` to use against road id `trackId`? Two
@@ -516,19 +532,30 @@
   }
 
   /* ================= per-frame simulation ================= */
+  var QUEUE_GAP = 38;           // how far back a train waiting its turn stands from the one in front
   function followTargets() {
     [1, -1].forEach(function (dir) {
       // A yard-origin service isn't on the shared approach line at all —
       // it's sitting in the yard on its own path, so it has no place in
       // this queue and no business being capped behind whoever's in it.
+      // Ordered by where they are on the ground, not by arc length: once a
+      // train is routed its path runs through the throat, which is a
+      // different length from the straight main for the same point, so `s`
+      // no longer says who is in front.
       var list = G.trains.filter(function (t) {
         return t.dir === dir && !t.yardOrigin && (t.state === 'approach' || t.state === 'routed');
-      }).sort(function (a, b) { return b.s - a.s; });
+      }).sort(function (a, b) { return (b.headX() - a.headX()) * dir; });
       for (var i = 0; i < list.length; i++) {
         var t = list[i];
         if (t.state !== 'approach') continue;
         var tgt = t.sHome - SIGNAL_SIGHT;
-        if (i > 0) tgt = Math.min(tgt, list[i - 1].s - list[i - 1].len - 38);
+        // How far back to stop behind the one in front, measured along the
+        // line rather than by arc length: the train ahead may already be
+        // routed, and its path through the throat is a different length
+        // from this one's for the same point on the ground, so subtracting
+        // its length from its own `s` can put the gap anywhere. Everyone
+        // in this queue is on the same straight main, so x is exact.
+        if (i > 0) tgt = Math.min(tgt, RY.sAtX(t.path, list[i - 1].tailX() - t.dir * QUEUE_GAP));
         t.targetS = Math.max(0, tgt);
       }
     });

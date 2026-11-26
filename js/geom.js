@@ -125,7 +125,7 @@
     {
       id: 'northgate-real', name: 'Northgate Junction (Realistic)', difficulty: 'Advanced',
       throat: 'cascade',
-      worldW: 2860,
+      worldW: 3000,
       lateness: 1.5,      // longer runs and throat blocks, as at the other two (game.js lateF)
       blurb: 'The same seven roads, through a throat laid like a real one: each main running out to the far road, the rest branching off it.',
       tracks: NORTHGATE_ROADS,
@@ -414,7 +414,7 @@
     real.name = 'Kaveripuram Junction (Realistic)';
     real.blurb = 'The same junction through a throat laid like a real one: every road stepped onto the next by crossovers.';
     real.throat = 'cascade';
-    real.worldW = 2860;
+    real.worldW = 3000;
     real.lateness = 1.5;                // longer runs and throat blocks: half as much again on lateness (game.js lateF)
     RY.STATIONS.splice(kv + 1, 0, real);
   })();
@@ -438,7 +438,7 @@
     // the same, gentle, curve — the plain station's band leaves the middle
     // road almost alongside one main, which a cascade throat has no use for
     real.band = [295, 815];
-    real.worldW = 2860;
+    real.worldW = 3000;
     real.lateness = 1.5;                // longer runs and throat blocks: half as much again on lateness (game.js lateF)
     RY.STATIONS.splice(pz + 1, 0, real);
   })();
@@ -627,7 +627,9 @@
       CASC_WYE = 160,      // in at speed eases over; and its other leg, onto the middle road
       CASC_EDGE = 10,      // a bend's end to the first crossover off its road
       CASC_MARGIN = 16,    // end of the throat to the longest platform's ramp
-      CASC_MIN_HOME = 70,  // keep the home signal, and whoever waits at it, on stage
+      CASC_MIN_HOME = 160, // keep the home signal, and whoever waits at it, on stage: a train
+                           // held there stands SIGNAL_SIGHT (80) short of it, and wants as
+                           // much again in front of that to be seen waiting at all
       CASC_MIN_STEP = 80,  // shorter than this and a coach would be on two crossovers at once
       CASC_FIT = 700,      // the longest through train, held at a starter, must stand clear of the throats
       CASC_FOUL = 80,      // a crossover's legs are a vehicle's width apart this far from its points
@@ -660,7 +662,12 @@
     var maxPlatCars = 4;
     tracks.forEach(function (t) { if (t.platform) maxPlatCars = Math.max(maxPlatCars, t.maxCars); });
     var half = (maxPlatCars * RY.PLAT_UNIT + 44) / 2;
-    var stopX = def.worldW ? def.worldW / 2 - 40 : STOP_X;
+    // A station laid in a wider world of its own is centred in it, so the
+    // two ends get the same room and a train waiting at either home signal
+    // stands the same way onto the stage. (The default world's STOP_X sits
+    // 40 west of centre, which is where every classic station's platforms
+    // have always been.)
+    var stopX = def.worldW ? def.worldW / 2 : STOP_X;
     var lay, yard = [];
 
     if (def.terminus) {
@@ -1245,7 +1252,15 @@
     var p = LAY.cascade, key = side + id;
     if (p._entry && p._entry[key] !== undefined) return p._entry[key];
     var e = cascadeEnd(side), arr = cascadeRoute(side, 'in', id).steps, u = 0, i;
-    for (i = 0; i < arr.length; i++) if (arr[i].piece) u = Math.max(u, e.pc[arr[i].piece].u0 + CASC_FOUL);
+    for (i = 0; i < arr.length; i++) if (arr[i].piece) {
+      // A lead is the one piece a route may use only part of, and while a
+      // train is on it it is on the track every road off it is reached by:
+      // it is clear of the lead not at its points but where it leaves it —
+      // which, for the road the lead itself becomes, is the far end.
+      var q = e.pc[arr[i].piece], uq = q.u0;
+      if (q.kind === 'lead') uq += (arr[i].leadT === undefined ? 1 : arr[i].leadT) * (q.u1 - q.u0);
+      u = Math.max(u, uq + CASC_FOUL);
+    }
     RY.TRACKS.forEach(function (t) {
       if (t.id === id) return;
       ['in', 'out'].forEach(function (way) {
@@ -1294,6 +1309,24 @@
     return x;
   };
 
+  /* The same the other way round: a train still running in is off the track
+     it shares with a departure from road `dep` once its tail is past here,
+     and the departure can be let out behind it rather than waiting for it to
+     be right off the throat. It matters most for a train run out along a
+     lead, which is on the lead — everyone's track — the whole way in, and so
+     holds its end of the station far longer than any one crossover would.
+     Null when the two share nothing at all. */
+  RY.arriveClearX = function (side, arr, dep) {
+    var p = LAY.cascade;
+    if (!p) return null;
+    var key = side + arr + '<' + dep;
+    if (p._aclear && p._aclear[key] !== undefined) return p._aclear[key];
+    var sh = cascadeShared(cascadeRoute(side, 'in', arr), cascadeRoute(side, 'out', dep), cascadeEnd(side).pc);
+    var x = sh && sh.u1 !== Infinity ? ladX(side, sh.u1 + CASC_FOUL) : null;
+    (p._aclear = p._aclear || {})[key] = x;
+    return x;
+  };
+
   /* Where a departure from road `id` is off that road's own track, so the
      road itself — and the platform it leads to — is free for the next
      train, whatever the rest of the throat is doing. */
@@ -1313,7 +1346,17 @@
      the one behind (bound for road follow) can be let in. That's just past
      the last of the track their two routes share — the fouling point of
      the turnout where they part — and never further in than the leader's
-     own entry clearance (RY.entryClearX), past which it's on its own road anyway. */
+     own entry clearance (RY.entryClearX), past which it's on its own road anyway.
+
+     Two arrivals for roads on the same side of the mains both come in off
+     the one lead, so sharing it is the usual case, not the exception: what
+     they really share is only as much of it as the first of them to turn
+     off uses. Past that turnout the one behind is on its own branch, and
+     the roads the leader still has to cross count for themselves — the
+     junction where each of their lines begins is a point of that road's
+     track, picked up below. So a train running out to the far road frees
+     the nearer ones behind it one by one, as it crosses them, instead of
+     holding the whole lead until it is in among the platforms. */
   RY.followClearX = function (side, lead, follow) {
     var p = LAY.cascade;
     if (!p) return null;
@@ -1322,8 +1365,13 @@
     var a = cascadeRoute(side, 'in', lead).steps, b = cascadeRoute(side, 'in', follow).steps, pc = cascadeEnd(side).pc, u = 0;
     a.forEach(function (sa) {
       b.forEach(function (sb) {
-        if (sa.piece && sa.piece === sb.piece) u = Math.max(u, pc[sa.piece].u1);
-        else if (!sa.piece && !sb.piece && sa.road === sb.road && sa.a <= sb.b + 0.5 && sb.a <= sa.b + 0.5) {
+        if (sa.piece && sa.piece === sb.piece) {
+          var q = pc[sa.piece];
+          if (q.kind === 'lead') {
+            var t = Math.min(sa.leadT === undefined ? 1 : sa.leadT, sb.leadT === undefined ? 1 : sb.leadT);
+            u = Math.max(u, q.u0 + t * (q.u1 - q.u0));
+          } else u = Math.max(u, q.u1);
+        } else if (!sa.piece && !sb.piece && sa.road === sb.road && sa.a <= sb.b + 0.5 && sb.a <= sa.b + 0.5) {
           u = Math.max(u, Math.min(sa.b, sb.b));
         }
       });

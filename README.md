@@ -57,7 +57,7 @@ crosses anything.
 It allows exactly the moves the classic Northgate does — the two throats'
 interlocking tables are identical — so it plays the same and only looks
 different. Its throats need the length, so it is laid in a wider world
-(`worldW: 2860`) and the map draws smaller, and it allows the same half as
+(`worldW: 3000`) and the map draws smaller, and it allows the same half as
 much again on lateness (`lateness: 1.5`) as the other realistic stations.
 
 ### Kaveripuram Junction is laid out and fitted out like an Indian station
@@ -166,7 +166,7 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
   lazy as the lead itself.
 - **Nothing in the throat is much sharper than anything else.** The leg over
   to the middle road is kept short so the chain beyond it can be long: every
-  curve at Kaveripuram (Realistic) falls between 0.18 and 0.78, against 1.36
+  curve at Kaveripuram (Realistic) falls between 0.18 and 0.76, against 1.36
   for a typical curve in a standard throat. The sharpest are the four
   crossovers that step from the middle road out to the far side, and what
   holds them back is the rule that a through freight standing at a goods
@@ -192,6 +192,20 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
   past the track their two routes share (`RY.followClearX`). A train still
   clearing the throat is checked against by every other move until it's
   clear.
+- **A train running out to the far road frees the nearer ones as it passes
+  them**, one by one, rather than holding the whole lead until it is in among
+  the platforms. Two arrivals for the same side of the mains both come in off
+  the one lead, so sharing it is the usual case, not the exception: what they
+  really share is only as much of it as the first of them to turn off uses.
+  So at Kaveripuram (Realistic), with a train from the west running out to
+  road 7, road 5 comes free the moment that train's tail is past where road
+  5's line begins — 546 px short of the platform ramp — then road 6 at 369,
+  then road 8 at 219, instead of all three waiting until it was as good as
+  in the platform. The same reading of the lead says when a train bound for
+  the road the lead itself becomes has finished with the throat: not at the
+  points where it left the main, which is where it would be on an ordinary
+  crossover, but at the far end, because the lead is the track every road
+  off it is reached by and it is on that track the whole way.
 - **A road is free the moment its train is off it.** An arrival and a
   departure at the same end cross the throat by quite separate crossovers,
   so the one leaving stops standing in the other's way as soon as it is off
@@ -200,6 +214,14 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
   A train leaving road 7 westward is clear of road 7 well before it has run
   out of the throat, so the next arrival can be given road 7 there and then
   and run straight in behind it.
+- **And the same the other way round.** A train still running in stops
+  standing in a departure's way as soon as its tail is past the track the
+  two share (`RY.arriveClearX`), rather than when it is off the throat
+  altogether. At Kaveripuram (Realistic) a train arriving from the west for
+  road 1 frees departures from roads 3 to 8 at x=432, where before they
+  waited until 1026 — a train's length and more earlier. It tells most for
+  one run out along a lead, which is on the lead the whole way in and so
+  holds its end of the station longer than any single crossover would.
 - **A train may follow another onto a road.** A road here runs on a long way
   past its platform, so a train leaving it is still on it, by the signals,
   well after it has left the platform. One arriving from the far end has
@@ -234,12 +256,16 @@ about 1.1 minutes rather than 0.75, and is cancelled after 12 at the home
 signal rather than 8.
 
 Stepping road to road takes room, so this station is laid in a world half
-as wide again (`worldW: 2860`), and the map shows it smaller. Where each
-main divides by the home signal, both legs are long and easy (200 and 260
-px), so a train running in at speed eases over. The longest run of steps
-(from beyond the mains, through road 4, out to the outermost road) sets the
-crossovers' length: four laid end to end, about 167 px each. Every other
-crossover stretches to fill its own gap, 220 to 290 px, and a goods line,
+as wide again (`worldW: 3000`), and the map shows it smaller. The station
+sits in the middle of that world, so both ends get the same room and a
+train held at either home signal stands the same way onto the map — far
+enough in that you can see it waiting, which is the whole point of a home
+signal. Where each main divides by the home signal, the lead is long and
+easy and the leg across to the middle road is kept short (160 px), so the
+chain beyond it can be long. That chain — the longest run of steps, from
+beyond the mains through road 4 and out to the outermost road — sets the
+crossovers' length: four laid end to end, about 211 px each. Every other
+crossover stretches to fill its own gap, 210 to 300 px, and a goods line,
 having no platform, lets its last crossover run on in toward the station, as
 long as a held through freight still fits clear of the throat it came in by.
 The steepest point anywhere is gentler than the typical curve in the
@@ -325,8 +351,8 @@ Two things are its own:
   curve.
 - **Its roads are further apart** than Kaveripuram's — 130 against 85 — so
   every crossover has further to travel. Laid in the same width of world
-  (`worldW: 2860`), the steepest point anywhere is 0.80, gentler than
-  Kaveripuram (Realistic)'s 0.97 and well under the 1.36 of a standard
+  (`worldW: 3000`), the steepest point anywhere is 0.64, gentler still than
+  Kaveripuram (Realistic)'s 0.76 and well under the 1.36 of a standard
   throat.
 
 It allows the same half-as-much-again on lateness (`lateness: 1.5`), for the
@@ -443,7 +469,10 @@ fixed grouping of roads:
   before they reach theirs, so nothing about it is actually in the way.
 - Two moves in the *same* direction always conflict, no matter the roads:
   they share the one running main that gets them there, so they're still
-  strictly first-come-first-served.
+  strictly first-come-first-served. The realistic stations are the exception:
+  their throats are long enough that one train can be well clear of another's
+  path while both are still inside one, so a second train the same way is let
+  in as soon as the one ahead is past the track they actually share.
 
 The home signal reflects exactly this: it shows red while the road ahead is
 unset, and turns green the instant a route clear of every current conflict is
