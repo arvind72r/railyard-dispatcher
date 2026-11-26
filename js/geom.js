@@ -124,8 +124,10 @@
        same turnout or piece of line, not merely when their curves cross. */
     {
       id: 'northgate-real', name: 'Northgate Junction (Realistic)', difficulty: 'Advanced',
-      throat: 'ladder',
-      blurb: 'The same seven roads, through a throat laid like a real one: a scissors crossover, then one turnout at a time.',
+      throat: 'cascade',
+      worldW: 3000,
+      lateness: 1.5,      // longer runs and throat blocks, as at the other two (game.js lateF)
+      blurb: 'The same seven roads, through a throat laid like a real one: each main running out to the far road, the rest branching off it.',
       tracks: NORTHGATE_ROADS,
       islands: [[1, 2], [3, 4], [5, 6]]
     },
@@ -412,7 +414,7 @@
     real.name = 'Kaveripuram Junction (Realistic)';
     real.blurb = 'The same junction through a throat laid like a real one: every road stepped onto the next by crossovers.';
     real.throat = 'cascade';
-    real.worldW = 2860;
+    real.worldW = 3000;
     real.lateness = 1.5;                // longer runs and throat blocks: half as much again on lateness (game.js lateF)
     RY.STATIONS.splice(kv + 1, 0, real);
   })();
@@ -436,7 +438,7 @@
     // the same, gentle, curve — the plain station's band leaves the middle
     // road almost alongside one main, which a cascade throat has no use for
     real.band = [295, 815];
-    real.worldW = 2860;
+    real.worldW = 3000;
     real.lateness = 1.5;                // longer runs and throat blocks: half as much again on lateness (game.js lateF)
     RY.STATIONS.splice(pz + 1, 0, real);
   })();
@@ -622,13 +624,17 @@
      ends like the ladder's. */
   var CASC_LEAD = 26,      // home signal to where each main divides
       CASC_BEND = 200,     // a main's bend onto the road beside it — long, so a train running
-      CASC_WYE = 260,      // in at speed eases over; and its other leg, onto the middle road
+      CASC_WYE = 160,      // in at speed eases over; and its other leg, onto the middle road
       CASC_EDGE = 10,      // a bend's end to the first crossover off its road
       CASC_MARGIN = 16,    // end of the throat to the longest platform's ramp
-      CASC_MIN_HOME = 110, // keep the home signal, and whoever waits at it, on stage
+      CASC_MIN_HOME = 160, // keep the home signal, and whoever waits at it, on stage: a train
+                           // held there stands SIGNAL_SIGHT (80) short of it, and wants as
+                           // much again in front of that to be seen waiting at all
       CASC_MIN_STEP = 80,  // shorter than this and a coach would be on two crossovers at once
       CASC_FIT = 700,      // the longest through train, held at a starter, must stand clear of the throats
-      CASC_FOUL = 80;      // a crossover's legs are a vehicle's width apart this far from its points
+      CASC_FOUL = 80,      // a crossover's legs are a vehicle's width apart this far from its points
+      CASC_PAST = 80,      // a road's line begins this far past where its lead crossed it
+      CASC_TURN = 40;      // the first road off a lead turns off this far along it, clear of the main
   function planCascade(tracks, mainA, mainB, room) {
     var upper = [], lower = [], middle = [];
     tracks.forEach(function (t) {
@@ -656,7 +662,12 @@
     var maxPlatCars = 4;
     tracks.forEach(function (t) { if (t.platform) maxPlatCars = Math.max(maxPlatCars, t.maxCars); });
     var half = (maxPlatCars * RY.PLAT_UNIT + 44) / 2;
-    var stopX = def.worldW ? def.worldW / 2 - 40 : STOP_X;
+    // A station laid in a wider world of its own is centred in it, so the
+    // two ends get the same room and a train waiting at either home signal
+    // stands the same way onto the stage. (The default world's STOP_X sits
+    // 40 west of centre, which is where every classic station's platforms
+    // have always been.)
+    var stopX = def.worldW ? def.worldW / 2 : STOP_X;
     var lay, yard = [];
 
     if (def.terminus) {
@@ -921,82 +932,171 @@
     var cr = dx * (q.y - at.y) - dy * (q.x - at.x);
     return { x: at.x, y: at.y, a: Math.atan2(dy, dx), side: cr > 0 ? 1 : -1 };
   }
-  /* One end of a cascade throat, in u: which main runs in here and which
-     out, the roads beyond each (nearest first), every crossover, and where
-     each road's own line begins. */
+  /* One end of a cascade throat, in u. Each main divides right by the
+     home signal: one leg runs out as a lead to the outermost road on its
+     own side, every nearer road branching off that lead, and the other
+     leg runs to the middle road, where a second lead reaches the
+     outermost road on the far side. So the outermost road is a straight
+     run off its main, and the throat fills the corner rather than
+     leaving it empty.
+
+     Four leads at each end, and they never meet: arrivals come off the
+     in main (AI) for its own side and across the middle road (AO) for
+     the far one; departures go to the out main the same way (DO, DI).
+     Each road therefore carries two junctions, one for each stream. */
+  function cascPts(side, q, t1) {
+    if (q.kind === 'lead') return ladLeadPts(side, q.fan, t1 === undefined ? 1 : t1);
+    if (q.kind === 'branch') return cascBranchPts(side, q.br);
+    return RY.sCurve(ladX(side, q.u0), q.y0, ladX(side, q.u1), q.y1, CURVE_N);
+  }
+  /* A lead from (u0, y0) out to the last of `roads`, with every earlier
+     road branching off it. Shortened until each road has been joined
+     before its platform begins (lim). */
+  /* Where a road turns off a lead, and the curve it takes.
+
+     The lead passes that road's level at uc, so the road's own line has to
+     begin past that point or the lead would cross it. The curve is laid as
+     the lead's own shape less a swell that grows from nothing: it leaves
+     tangent to the lead, is never on the far side of it, and arrives level
+     on the road. Made as long as that allows, which is a few times the
+     clearance past the crossing — long and lazy, like the lead itself. */
+  function leadOff(W, L, u0, u) { return W * smooth(Math.max(0, Math.min(1, (u - u0) / L))); }
+  function leadSlope(W, L, u0, u) { return W * dsmooth(Math.max(0, Math.min(1, (u - u0) / L))) / L; }
+  function cascBranchAt(W, L, tMin, w, u0, cap) {
+    var uc = u0 + invSmooth(w / W) * L;
+    var uLand = Math.min(uc + CASC_PAST, cap);
+    if (uLand <= uc + 4) uLand = uc + 4;
+    var D = Math.max(0.5, leadOff(W, L, u0, uLand) - w);
+    var sl = Math.max(1e-6, leadSlope(W, L, u0, uLand));
+    // h(f) = a f^2 + b f^3 rises from nothing to 1 and meets the road level;
+    // it only stays on the near side while its end slope H1 is at most 3
+    var earliest = u0 + Math.max(tMin, CASC_TURN / L) * L;
+    var len = Math.max(40, Math.min(3 * D / sl, uLand - earliest));
+    var uLeave = uLand - len;
+    return { t: (uLeave - u0) / L, wt: leadOff(W, L, u0, uLeave), D: D, H1: sl * len / D,
+             u0: uLeave, u1: uLand, len: len };
+  }
+  /* The points of such a curve. */
+  function cascBranchPts(side, br) {
+    var f = br.fan, L = f.u1 - f.u0, W = Math.abs(f.y1 - f.y0), sg = f.sg;
+    var a = 3 - br.H1, b = br.H1 - 2, n = 64, pts = [], i, t, u, h;
+    for (i = 0; i <= n; i++) {
+      t = i / n;
+      u = br.u0 + t * (br.u1 - br.u0);
+      h = a * t * t + b * t * t * t;
+      pts.push({ x: ladX(side, u), y: f.y0 + sg * (leadOff(W, L, f.u0, u) - br.D * h) });
+    }
+    return pts;
+  }
+  function cascFan(key, u0, y0, roads, room, lim) {
+    var n = roads.length, outer = roads[n - 1];
+    var W = Math.abs(outer.y - y0), sg = outer.y > y0 ? 1 : -1;
+    var L = Math.max(CASC_MIN_STEP, Math.min(room - u0, lim(outer) - u0)), fan, k, pass;   // room caps a goods line's lead
+    for (pass = 0; pass < 6; pass++) {
+      fan = { key: key, u0: u0, u1: u0 + L, y0: y0, y1: outer.y, sg: sg, branches: [] };
+      var tMin = 0, worst = 1;
+      for (k = 0; k < n - 1; k++) {
+        var w = Math.abs(roads[k].y - y0), br = cascBranchAt(W, L, tMin, w, u0, lim(roads[k]));
+        var b = { road: roads[k].id, t: br.t, u0: br.u0, u1: br.u1, D: br.D, H1: br.H1,
+                  fan: fan, y0: y0 + sg * br.wt, y1: roads[k].y };
+        fan.branches.push(b);
+        var cap = lim(roads[k]);
+        if (b.u1 > cap) worst = Math.min(worst, Math.max(0.2, (cap - u0) / (b.u1 - u0)));
+        tMin = invSmooth(w / W);
+      }
+      if (worst >= 0.999) break;
+      L = Math.max(CASC_MIN_STEP, L * worst);
+    }
+    return fan;
+  }
   function cascadeEnd(side) {
     var p = LAY.cascade, key = side;
     if (p._ends && p._ends[key]) return p._ends[key];
     var inA = side === 'E';
     var inG = inA ? p.upper : p.lower, outG = inA ? p.lower : p.upper, mid = p.mid;
     var yIn = inA ? LAY.mainA : LAY.mainB, yOut = inA ? LAY.mainB : LAY.mainA;
-    var pc = {}, start = {}, k, u0 = CASC_LEAD, bendEnd = u0 + CASC_BEND, us = p.us, T = p.T;
-    var m0 = bendEnd + CASC_EDGE, nIn = inG.length, nOut = outG.length;
-    // the two long chains, laid end to end from us: departures from the in
-    // side's roads (Q, then E1..) and arrivals to the out side's (R, then
-    // C1..). The k-th crossover of a chain lands on the k-th road out, and
-    // must have done so by where that road's platform starts; a goods line
-    // has none, so only the fit of a held through train limits it. The
-    // other crossover in each gap is stretched to fill what's left nearer
-    // the signal.
-    var span = LAY.xEastHome - LAY.xWestHome;
+    var pc = {}, start = {}, T = p.T, k;
     function lim(r) {
       if (!r.platform) return Infinity;
       var sp = RY.platSpan(r);
-      return side === 'W' ? sp.x0 - CASC_MARGIN - LAY.xWestHome : LAY.xEastHome - sp.x1 - CASC_MARGIN;
+      return (side === 'W' ? sp.x0 - CASC_MARGIN - LAY.xWestHome : LAY.xEastHome - sp.x1 - CASC_MARGIN);
     }
-    function chainL(roads) {
+    // each main's second leg, over to the middle road; the two land a
+    // little apart so the road has a junction of its own for each stream
+    pc.PmIn = { id: 'PmIn', kind: 'curve', u0: CASC_LEAD, u1: CASC_LEAD + CASC_WYE, y0: yIn, y1: mid.y };
+    pc.PmOut = { id: 'PmOut', kind: 'curve', u0: CASC_LEAD, u1: CASC_LEAD + CASC_WYE - 8, y0: yOut, y1: mid.y };
+    function addFan(id, u0, y0, roads) {
+      var fan = cascFan(id, u0, y0, roads, T, lim);
+      pc[id] = { id: id, kind: 'lead', fan: fan, u0: fan.u0, u1: fan.u1, y0: fan.y0, y1: fan.y1 };
+      fan.branches.forEach(function (b, t) {
+        pc[id + 'b' + t] = { id: id + 'b' + t, kind: 'branch', br: b, fk: id, u0: b.u0, u1: b.u1, y0: b.y0, y1: b.y1 };
+      });
+      return fan;
+    }
+    // Each main runs out as a lead to the outermost road on its own side,
+    // every nearer road branching off it: the outermost is a straight run
+    // in off the main, and the throat reaches the corner instead of
+    // leaving it empty.
+    addFan('AI', CASC_LEAD, yIn, inG);                      // arrivals, in main's own side
+    addFan('DO', CASC_LEAD, yOut, outG);                    // departures, out main's own side
+    // Crossing to the far side is a different matter: a lead out of the
+    // middle road would have to cross roads this end's own lead has
+    // already begun. Those two streams step road to road instead, their
+    // crossovers laid end to end from the middle road outward.
+    var span = LAY.xEastHome - LAY.xWestHome, nIn = inG.length, nOut = outG.length;
+    function chainL(roads, us) {
       var l = Infinity, k, n = roads.length;
       for (k = 1; k <= n; k++) l = Math.min(l, (lim(roads[k - 1]) - us) / k);
-      // ending on a goods line: its starter here, and where a train coming
-      // in on it at the far end is clear, must leave room for a train between
       if (!roads[n - 1].platform) l = Math.min(l, (span - 2 * us - 30 - CASC_FOUL - CASC_FIT) / (2 * n - 1));
       return Math.max(CASC_MIN_STEP, l);
     }
-    var l1 = chainL(inG), l2 = chainL(outG);
-    function piece(id, a, b, ya, yb) { pc[id] = { id: id, u0: a, u1: b, y0: ya, y1: yb }; }
-    pc.bendIn = { id: 'bendIn', u0: u0, u1: bendEnd, y0: yIn, y1: inG[0].y, bend: true };
-    pc.bendOut = { id: 'bendOut', u0: u0, u1: bendEnd, y0: yOut, y1: outG[0].y, bend: true };
-    piece('PmOut', u0, u0 + CASC_WYE - 4, yOut, mid.y);      // departures from road 4, onto the out main
-    piece('PmIn', u0, u0 + CASC_WYE, yIn, mid.y);            // arrivals to road 4, off the in main
-    piece('R', us, us + l2, mid.y, outG[0].y);
-    piece('Q', us + 4, us + l1, mid.y, inG[0].y);
-    for (k = 1; k < nOut; k++) {
-      piece('C' + k, us + k * l2, us + (k + 1) * l2, outG[k - 1].y, outG[k].y);
-      piece('M' + k, k === 1 ? m0 : us + (k - 1) * l2, us + k * l2, outG[k - 1].y, outG[k].y);
-    }
-    for (k = 1; k < nIn; k++) {
-      piece('E' + k, us + k * l1, us + (k + 1) * l1, inG[k - 1].y, inG[k].y);
-      piece('D' + k, k === 1 ? m0 : us + (k - 1) * l1, us + k * l1, inG[k - 1].y, inG[k].y);
-    }
-    start[outG[0].id] = bendEnd; start[inG[0].id] = bendEnd; start[mid.id] = Math.min(pc.PmOut.u1, pc.PmIn.u1);
-    for (k = 1; k < outG.length; k++) start[outG[k].id] = pc['M' + k].u1;
-    for (k = 1; k < inG.length; k++) start[inG[k].id] = pc['D' + k].u1;
-    var e = { side: side, pc: pc, start: start, inG: inG, outG: outG, mid: mid, yIn: yIn, yOut: yOut, end: p.T };
+    var ua = pc.PmIn.u1 + 6, ud = pc.PmIn.u1 + 12;          // the departures' pair of junctions on the
+    var l2 = chainL(outG, ua), l1 = chainL(inG, ud);        // middle road straddles the arrivals'
+    function piece(id, a, b, ya, yb) { pc[id] = { id: id, kind: 'curve', u0: a, u1: b, y0: ya, y1: yb }; }
+    piece('R', ua, ua + l2, mid.y, outG[0].y);
+    piece('Q', ud, ud + l1, mid.y, inG[0].y);
+    for (k = 1; k < nOut; k++) piece('C' + k, ua + k * l2, ua + (k + 1) * l2, outG[k - 1].y, outG[k].y);
+    for (k = 1; k < nIn; k++) piece('E' + k, ud + k * l1, ud + (k + 1) * l1, inG[k - 1].y, inG[k].y);
+    // a road's own line begins at the outermost of its junctions
+    RY.TRACKS.forEach(function (t) { start[t.id] = Infinity; });
+    start[mid.id] = Math.min(pc.PmIn.u1, pc.PmOut.u1);
+    [['AI', inG], ['DO', outG]].forEach(function (g) {
+      var fan = pc[g[0]].fan, roads = g[1];
+      fan.branches.forEach(function (b) { start[b.road] = Math.min(start[b.road], b.u1); });
+      var last = roads[roads.length - 1].id;
+      start[last] = Math.min(start[last], fan.u1);
+    });
+    var e = { side: side, pc: pc, start: start, inG: inG, outG: outG, mid: mid, yIn: yIn, yOut: yOut, end: T };
     (p._ends = p._ends || {})[key] = e;
     return e;
   }
   /* A route through one end, from its home signal in to where road `id`
-     runs on alone: 'in' off the main that runs in here, 'out' onto the one
-     that runs out (laid from the main inward either way, like
-     ladderRoute's). Points to run it, and the track it holds: every
-     crossover and every stretch of each road's line it uses. */
+     runs on alone. Taking a lead also means passing, on the roads nearer
+     the main, the junction where each of them joins it — a point of
+     their track, which is why a train coming in to a near road and one
+     leaving a far one still stand in each other's way. */
   function cascadeRoute(side, way, id) {
     var e = cascadeEnd(side), pc = e.pc, p = LAY.cascade, ck = side + way + id;
     if (p._routes && p._routes[ck]) return p._routes[ck];
-    var steps = [], at, k, j;
+    var steps = [], at = 0, j;
     var ki = -1, ko = -1;
     for (j = 0; j < e.inG.length; j++) if (e.inG[j].id === id) ki = j;
     for (j = 0; j < e.outG.length; j++) if (e.outG[j].id === id) ko = j;
     function run(road, to) { steps.push({ road: road, a: at, b: to }); at = to; }
     function take(pid) { steps.push({ piece: pid }); at = pc[pid].u1; }
-    // the in side's roads are the in main's bend and what steps off it; the
-    // middle road and everything beyond it come off the main's other leg
+    function fanTo(fid, roads, t) {
+      var fan = pc[fid].fan, n = roads.length, i;
+      steps.push({ piece: fid, leadT: t < n - 1 ? fan.branches[t].t : 1 });
+      for (i = 0; i < t; i++) {                 // junctions passed on the way out
+        var u = fan.branches[i].u1;
+        steps.push({ road: roads[i].id, a: u, b: u });
+      }
+      at = fan.u1;
+      if (t < n - 1) take(fid + 'b' + t);
+    }
     if (way === 'in') {
-      if (ki >= 0) {
-        take('bendIn');
-        for (j = 1; j <= ki; j++) { run(e.inG[j - 1].id, pc['D' + j].u0); take('D' + j); }
-      } else {
+      if (ki >= 0) fanTo('AI', e.inG, ki);
+      else {
         take('PmIn');
         if (ko >= 0) {
           run(e.mid.id, pc.R.u0); take('R');
@@ -1004,10 +1104,8 @@
         }
       }
     } else {
-      if (ko >= 0) {
-        take('bendOut');
-        for (j = 1; j <= ko; j++) { run(e.outG[j - 1].id, pc['M' + j].u0); take('M' + j); }
-      } else {
+      if (ko >= 0) fanTo('DO', e.outG, ko);
+      else {
         take('PmOut');
         if (ki >= 0) {
           run(e.mid.id, pc.Q.u0); take('Q');
@@ -1019,12 +1117,8 @@
     var y0 = way === 'in' ? e.yIn : e.yOut, pts = [{ x: ladX(side, 0), y: y0 }], yOf = {};
     RY.TRACKS.forEach(function (t) { yOf[t.id] = t.y; });
     steps.forEach(function (st) {
-      if (st.piece) {
-        var q = pc[st.piece];
-        cat(pts, RY.sCurve(ladX(side, q.u0), q.y0, ladX(side, q.u1), q.y1, CURVE_N), false);
-      } else if (st.b > st.a) {
-        pts.push({ x: ladX(side, st.a), y: yOf[st.road] }, { x: ladX(side, st.b), y: yOf[st.road] });
-      }
+      if (st.piece) cat(pts, cascPts(side, pc[st.piece], st.leadT), false);
+      else if (st.b > st.a) pts.push({ x: ladX(side, st.a), y: yOf[st.road] }, { x: ladX(side, st.b), y: yOf[st.road] });
     });
     // the train carries on along its road toward the platforms: as track
     // it holds, that last stretch has no inner end
@@ -1158,7 +1252,15 @@
     var p = LAY.cascade, key = side + id;
     if (p._entry && p._entry[key] !== undefined) return p._entry[key];
     var e = cascadeEnd(side), arr = cascadeRoute(side, 'in', id).steps, u = 0, i;
-    for (i = 0; i < arr.length; i++) if (arr[i].piece) u = Math.max(u, e.pc[arr[i].piece].u0 + CASC_FOUL);
+    for (i = 0; i < arr.length; i++) if (arr[i].piece) {
+      // A lead is the one piece a route may use only part of, and while a
+      // train is on it it is on the track every road off it is reached by:
+      // it is clear of the lead not at its points but where it leaves it —
+      // which, for the road the lead itself becomes, is the far end.
+      var q = e.pc[arr[i].piece], uq = q.u0;
+      if (q.kind === 'lead') uq += (arr[i].leadT === undefined ? 1 : arr[i].leadT) * (q.u1 - q.u0);
+      u = Math.max(u, uq + CASC_FOUL);
+    }
     RY.TRACKS.forEach(function (t) {
       if (t.id === id) return;
       ['in', 'out'].forEach(function (way) {
@@ -1207,6 +1309,24 @@
     return x;
   };
 
+  /* The same the other way round: a train still running in is off the track
+     it shares with a departure from road `dep` once its tail is past here,
+     and the departure can be let out behind it rather than waiting for it to
+     be right off the throat. It matters most for a train run out along a
+     lead, which is on the lead — everyone's track — the whole way in, and so
+     holds its end of the station far longer than any one crossover would.
+     Null when the two share nothing at all. */
+  RY.arriveClearX = function (side, arr, dep) {
+    var p = LAY.cascade;
+    if (!p) return null;
+    var key = side + arr + '<' + dep;
+    if (p._aclear && p._aclear[key] !== undefined) return p._aclear[key];
+    var sh = cascadeShared(cascadeRoute(side, 'in', arr), cascadeRoute(side, 'out', dep), cascadeEnd(side).pc);
+    var x = sh && sh.u1 !== Infinity ? ladX(side, sh.u1 + CASC_FOUL) : null;
+    (p._aclear = p._aclear || {})[key] = x;
+    return x;
+  };
+
   /* Where a departure from road `id` is off that road's own track, so the
      road itself — and the platform it leads to — is free for the next
      train, whatever the rest of the throat is doing. */
@@ -1226,7 +1346,17 @@
      the one behind (bound for road follow) can be let in. That's just past
      the last of the track their two routes share — the fouling point of
      the turnout where they part — and never further in than the leader's
-     own entry clearance (RY.entryClearX), past which it's on its own road anyway. */
+     own entry clearance (RY.entryClearX), past which it's on its own road anyway.
+
+     Two arrivals for roads on the same side of the mains both come in off
+     the one lead, so sharing it is the usual case, not the exception: what
+     they really share is only as much of it as the first of them to turn
+     off uses. Past that turnout the one behind is on its own branch, and
+     the roads the leader still has to cross count for themselves — the
+     junction where each of their lines begins is a point of that road's
+     track, picked up below. So a train running out to the far road frees
+     the nearer ones behind it one by one, as it crosses them, instead of
+     holding the whole lead until it is in among the platforms. */
   RY.followClearX = function (side, lead, follow) {
     var p = LAY.cascade;
     if (!p) return null;
@@ -1235,8 +1365,13 @@
     var a = cascadeRoute(side, 'in', lead).steps, b = cascadeRoute(side, 'in', follow).steps, pc = cascadeEnd(side).pc, u = 0;
     a.forEach(function (sa) {
       b.forEach(function (sb) {
-        if (sa.piece && sa.piece === sb.piece) u = Math.max(u, pc[sa.piece].u1);
-        else if (!sa.piece && !sb.piece && sa.road === sb.road && sa.a <= sb.b + 0.5 && sb.a <= sa.b + 0.5) {
+        if (sa.piece && sa.piece === sb.piece) {
+          var q = pc[sa.piece];
+          if (q.kind === 'lead') {
+            var t = Math.min(sa.leadT === undefined ? 1 : sa.leadT, sb.leadT === undefined ? 1 : sb.leadT);
+            u = Math.max(u, q.u0 + t * (q.u1 - q.u0));
+          } else u = Math.max(u, q.u1);
+        } else if (!sa.piece && !sb.piece && sa.road === sb.road && sa.a <= sb.b + 0.5 && sb.a <= sa.b + 0.5) {
           u = Math.max(u, Math.min(sa.b, sb.b));
         }
       });
@@ -1250,27 +1385,25 @@
   /* Where to draw point blades in a cascade throat: wherever a crossover
      leaves a line that also carries on — the line running on past it, or
      another crossover landing there to join it. */
+  /* Where to draw point blades in a cascade throat: where each main
+     divides, where each leg lands on the middle road, where a lead
+     leaves it again, and where every road branches off a lead. */
   RY.cascadeTurnouts = function () {
     var out = [];
     if (!LAY.cascade) return out;
     ['W', 'E'].forEach(function (side) {
-      var e = cascadeEnd(side), pc = e.pc, inw = side === 'W' ? 1 : -1, id, q, pts, rd, lands;
-      var roadAt = function (y) { for (var i = 0; i < RY.TRACKS.length; i++) if (Math.abs(RY.TRACKS[i].y - y) < 1) return RY.TRACKS[i].id; return -1; };
+      var e = cascadeEnd(side), pc = e.pc, inw = side === 'W' ? 1 : -1, id, q, pts, fan, L;
       for (id in pc) {
         q = pc[id];
-        if (q.bend) continue;
-        pts = RY.sCurve(ladX(side, q.u0), q.y0, ladX(side, q.u1), q.y1, CURVE_N);
-        // its outer end, leaving inward
-        rd = roadAt(q.y0);
-        if (rd < 0 && (Math.abs(q.y0 - e.yIn) < 1 || Math.abs(q.y0 - e.yOut) < 1)) {   // a main dividing
+        pts = cascPts(side, q);
+        if (q.kind === 'branch') {
+          fan = pc[q.fk].fan; L = fan.u1 - fan.u0;
+          out.push(ladFrame(pts[0], inw, fan.sg * leadSlope(Math.abs(fan.y1 - fan.y0), L, fan.u0, q.br.u0), pts[3]));
+        } else if (q.kind === 'curve') {
+          out.push(ladFrame(pts[pts.length - 1], -inw, 0, pts[pts.length - 5]));
+        } else {
           out.push(ladFrame(pts[0], inw, 0, pts[4]));
-          continue;
         }
-        lands = Object.keys(pc).some(function (o) { return !pc[o].bend && Math.abs(pc[o].u1 - q.u0) < 0.5 && Math.abs(pc[o].y1 - q.y0) < 1; });
-        if (rd >= 0 && (q.u0 > e.start[rd] + 0.5 || lands)) out.push(ladFrame(pts[0], inw, 0, pts[4]));
-        // its inner end, leaving outward, where the line runs on outward of it
-        rd = roadAt(q.y1);
-        if (rd >= 0 && q.u1 > e.start[rd] + 0.5) out.push(ladFrame(pts[pts.length - 1], -inw, 0, pts[pts.length - 5]));
       }
     });
     return out;
@@ -1541,10 +1674,7 @@
         // each main, from off-stage to where it bends onto the road beside it
         segs.push(RY.makePath([{ x: end, y: e.yIn }, { x: ladX(side, CASC_LEAD), y: e.yIn }]));
         segs.push(RY.makePath([{ x: end, y: e.yOut }, { x: ladX(side, CASC_LEAD), y: e.yOut }]));
-        for (id in e.pc) {
-          q = e.pc[id];
-          segs.push(RY.makePath(RY.sCurve(ladX(side, q.u0), q.y0, ladX(side, q.u1), q.y1, CURVE_N)));
-        }
+        for (id in e.pc) segs.push(RY.makePath(cascPts(side, e.pc[id])));
       });
       // every road, from where its line begins at one end to the other
       for (i = 0; i < RY.TRACKS.length; i++) {
