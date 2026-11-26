@@ -624,10 +624,10 @@
      ends like the ladder's. */
   var CASC_LEAD = 26,      // home signal to where each main divides
       CASC_BEND = 200,     // a main's bend onto the road beside it — long, so a train running
-      CASC_WYE = 260,      // in at speed eases over; and its other leg, onto the middle road
+      CASC_WYE = 160,      // in at speed eases over; and its other leg, onto the middle road
       CASC_EDGE = 10,      // a bend's end to the first crossover off its road
       CASC_MARGIN = 16,    // end of the throat to the longest platform's ramp
-      CASC_MIN_HOME = 110, // keep the home signal, and whoever waits at it, on stage
+      CASC_MIN_HOME = 70,  // keep the home signal, and whoever waits at it, on stage
       CASC_MIN_STEP = 80,  // shorter than this and a coach would be on two crossovers at once
       CASC_FIT = 700,      // the longest through train, held at a starter, must stand clear of the throats
       CASC_FOUL = 80,      // a crossover's legs are a vehicle's width apart this far from its points

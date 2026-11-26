@@ -163,7 +163,15 @@ different throat at each end (`throat: 'cascade'`, `planCascade` in
   be on the far side of it, and arrives level on its road, a little past
   where the lead crossed that road's level — so the road's own line begins
   beyond the crossing and the two never cross. They come out as long and as
-  lazy as the lead itself, 200 to 260 against a lead's 880.
+  lazy as the lead itself.
+- **Nothing in the throat is much sharper than anything else.** The leg over
+  to the middle road is kept short so the chain beyond it can be long: every
+  curve at Kaveripuram (Realistic) falls between 0.18 and 0.78, against 1.36
+  for a typical curve in a standard throat. The sharpest are the four
+  crossovers that step from the middle road out to the far side, and what
+  holds them back is the rule that a through freight standing at a goods
+  line's starter must still fit clear of the throat it came in by: a longer
+  crossover lands deeper, which pushes that starter deeper still.
 - **The far side is reached across the middle road**: off the main's other
   leg onto road 4, then road to road, one crossover at a time. A lead out of
   the middle road would have to cross roads this end's own lead has already
